@@ -1,0 +1,14 @@
+{
+	"compilerOptions": {
+		"declaration": true,
+		"module": "commonjs",
+		"noImplicitAny": true,
+		"outDir": "../dist",
+		"target": "es5"
+	},
+	"files": [
+		"../typings/tsd.d.ts",
+
+		"cget.ts"
+	]
+}

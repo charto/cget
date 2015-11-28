@@ -1,6 +1,6 @@
 {
   "name": "cget",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Robust streaming cache for HTTP requests",
   "main": "dist/cget.js",
   "typings": "dist/cget.d.ts",

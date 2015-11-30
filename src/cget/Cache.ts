@@ -141,7 +141,6 @@ export class Cache {
 	fetchCached(options: FetchOptions, onFinish: (err?: NodeJS.ErrnoException) => void) {
 		// These fix atom-typescript syntax highlight: ))
 		var urlRemote = options.url;
-		console.log('BEGIN CACHED ' + urlRemote);
 
 		// Any errors shouldn't be handled here, but instead in the caller.
 
@@ -155,7 +154,6 @@ export class Cache {
 			var streamIn = fs.createReadStream(targetPath, {encoding: 'utf-8'});
 
 			streamIn.on('end', () => {
-				console.log('FINISH CACHED ' + urlRemote);
 				onFinish();
 			});
 
@@ -169,7 +167,6 @@ export class Cache {
 	fetchRemote(options: FetchOptions, onFinish: (err?: NodeJS.ErrnoException) => void) {
 		// These fix atom-typescript syntax highlight: ))
 		var urlRemote = options.url;
-		console.log('BEGIN REMOTE ' + urlRemote);
 
 		var redirectList: string[] = [];
 		var found = false;
@@ -285,7 +282,6 @@ console.error(urlRemote);
 		});
 
 		streamRequest.on('end', () => {
-			console.log('FINISH REMOTE ' + urlRemote);
 			onFinish();
 		});
 

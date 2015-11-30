@@ -82,7 +82,6 @@ export function mkdirp(pathName: string) {
 		// Create path components that didn't exist yet.
 		partList.slice(prefixList.length),
 		(pathPrefix: any, part: string, index: number, len: number) => {
-			console.error(['CREATE NEW PATH', pathPrefix, part, partList.length, prefixList.length].join('\t'));
 			var pathNew = pathPrefix + path.sep + part;
 
 			return(Promise.try(() =>

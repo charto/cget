@@ -260,7 +260,7 @@ console.error(urlRemote);
 				throw(err);
 			}
 
-			streamRequest.pipe(streamBuffer);
+			streamRequest.pause();
 
 			this.createCachePath(urlRemote).then((cachePath: string) => {
 				var streamOut = fs.createWriteStream(cachePath);
@@ -271,7 +271,9 @@ console.error(urlRemote);
 					streamOut.close();
 				});
 
-				streamBuffer.pipe(streamOut);
+				streamRequest.pipe(streamOut, {end: true});
+				streamRequest.pipe(streamBuffer, {end: true});
+				streamRequest.resume();
 
 				return(this.addLinks(redirectList, urlRemote).finally(() => {
 					resolve(new CacheResult(

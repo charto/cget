@@ -103,7 +103,7 @@ export class Cache {
 
 	createCachePath(urlRemote: string) {
 		return(this.getCachePath(urlRemote).then((cachePath: string) => {
-			return(mkdirp(path.dirname(cachePath)).then(() => cachePath));
+			return(mkdirp(path.dirname(cachePath), this.indexName).then(() => cachePath));
 		}));
 	}
 

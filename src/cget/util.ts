@@ -8,6 +8,8 @@ import * as url from 'url';
 import * as path from 'path';
 import * as Promise from 'bluebird';
 
+/** Asynchronous versions of fs methods, wrapped by Bluebird. */
+
 export var fsa = {
 	stat: Promise.promisify(fs.stat),
 	open: Promise.promisify(fs.open),
@@ -22,6 +24,8 @@ export var fsa = {
 var againSymbol = {};
 var again = () => againSymbol;
 
+/** Promise while loop. */
+
 export function repeat<T>(fn: (again: () => {}) => Promise<T>): Promise<T> {
 	return(Promise.try(() =>
 		fn(again)
@@ -29,6 +33,8 @@ export function repeat<T>(fn: (again: () => {}) => Promise<T>): Promise<T> {
 		(result == againSymbol) ? repeat(fn) : result
 	));
 }
+
+/** Copy all members of src object to dst object. */
 
 export function extend(dst: {[key: string]: any}, src: {[key: string]: any}) {
 	for(var key of Object.keys(src)) {
@@ -38,11 +44,17 @@ export function extend(dst: {[key: string]: any}, src: {[key: string]: any}) {
 	return(dst);
 }
 
+/** Make shallow clone of object. */
+
 export function clone(src: Object) {
 	return(extend({}, src));
 }
 
-export function mkdirp(pathName: string) {
+/** Create a new directory and its parent directories.
+  * If a path component to create conflicts with an existing file,
+  * rename to file to <component>/<indexName>. */
+
+export function mkdirp(pathName: string, indexName: string) {
 	var partList = path.resolve(pathName).split(path.sep);
 	var prefixList = partList.slice(0);
 	var pathPrefix: string;
@@ -59,14 +71,14 @@ export function mkdirp(pathName: string) {
 				// Trying to convert a file into a directory.
 				// Rename the file to indexName and move it into the new directory.
 
-				var tempPath = pathPrefix + '.' + this.makeTempSuffix(6);
+				var tempPath = pathPrefix + '.' + makeTempSuffix(6);
 
 				return(Promise.try(() =>
 					fsa.rename(pathPrefix, tempPath)
 				).then(() =>
 					fsa.mkdir(pathPrefix)
 				).then(() =>
-					fsa.rename(tempPath, path.join(pathPrefix, this.indexName))
+					fsa.rename(tempPath, path.join(pathPrefix, indexName))
 				));
 			} else if(!stats.isDirectory()) {
 				throw(new Error('Tried to create a directory inside something weird: ' + pathPrefix));
@@ -99,7 +111,7 @@ export function mkdirp(pathName: string) {
 	));
 }
 
-// Create a string of random letters and numbers.
+/** Create a string of random letters and numbers. */
 
 export function makeTempSuffix(length: number) {
 	return(

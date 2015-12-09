@@ -6,7 +6,7 @@
   "typings": "dist/cget.d.ts",
   "browser": "dist/browser.js",
   "scripts": {
-    "prepublish": "tsd install && cd src && tsc && tsc -p tsconfig-browser.json && tsc -p ../test",
+    "prepublish": "tsd install && tsc -p src && tsc -p src/tsconfig-browser.json && tsc -p test",
     "test": "node test/serve.js test/cache index.html"
   },
   "author": "Juha Järvi",
@@ -29,11 +29,11 @@
     "server"
   ],
   "dependencies": {
-    "bluebird": "~3.0.5",
+    "bluebird": "~3.0.6",
     "request": "~2.67.0"
   },
   "devDependencies": {
     "tsd": "~0.6.5",
-    "typescript": "^1.8.0-dev.20151128"
+    "typescript": "^1.8.0-dev.20151204"
   }
 }

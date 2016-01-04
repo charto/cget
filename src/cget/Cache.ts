@@ -127,8 +127,21 @@ export class Cache {
 		}));
 	}
 
-	// Fetch URL from cache or download it if not available yet.
-	// Returns the file's URL after redirections and a readable stream of its contents.
+	/** Store custom data related to a URL-like address,
+	  * for example an XML namespace.
+		* @return Promise resolving after all data is written. */
+
+	store(urlRemote: string, data: string) {
+		urlRemote = sanitizeUrl(urlRemote);
+
+		return(this.createCachePath(urlRemote).then((cachePath: string) =>
+			fsa.writeFile(cachePath, data, {encoding: 'utf-8'})
+		));
+	}
+
+	/** Fetch URL from cache or download it if not available yet.
+	 * Returns the file's URL after redirections
+	 * and a readable stream of its contents. */
 
 	fetch(options: FetchOptions) {
 		return(this.fetchQueue.add(new FetchTask(this, {

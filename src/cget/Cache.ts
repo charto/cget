@@ -41,7 +41,7 @@ export class Cache {
 	addLinks(redirectList: Address[], target: Address) {
 		return(Promise.map(redirectList, (src: Address) => {
 			this.createCachePath(src).then((cachePath: string) =>
-				fsa.writeFile(cachePath, 'LINK: ' + target.uri + '\n', {encoding: 'utf-8'})
+				fsa.writeFile(cachePath, 'LINK: ' + target.uri + '\n', {encoding: 'utf8'})
 			)
 		}));
 	}
@@ -99,7 +99,7 @@ export class Cache {
 				fsa.close(fd);
 
 				if(buf.equals(new Buffer('LINK: ', 'ascii'))) {
-					return(fsa.readFile(cachePath, {encoding: 'utf-8'}).then((link: string) => {
+					return(fsa.readFile(cachePath, {encoding: 'utf8'}).then((link: string) => {
 						var urlRemote = link.substr(6).replace(/\s+$/, '');
 
 						return(urlRemote);
@@ -115,7 +115,7 @@ export class Cache {
 
 	store(uri: string, data: string) {
 		return(this.createCachePath(new Address(uri)).then((cachePath: string) =>
-			fsa.writeFile(cachePath, data, {encoding: 'utf-8'})
+			fsa.writeFile(cachePath, data, {encoding: 'utf8'})
 		));
 	}
 
@@ -143,7 +143,7 @@ export class Cache {
 		});
 
 		return(targetPath.then((targetPath: string) => {
-			var streamIn = fs.createReadStream(targetPath, {encoding: 'utf-8'});
+			var streamIn = fs.createReadStream(targetPath, {encoding: null});
 
 			streamIn.on('end', () => {
 				onFinish();

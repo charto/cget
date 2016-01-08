@@ -10,28 +10,29 @@ import * as stream from 'stream';
 import * as request from 'request';
 import * as Promise from 'bluebird';
 
-import {fsa, repeat, mkdirp, isDir, sanitizePath, sanitizeUrl} from './util'
-import {TaskQueue} from './TaskQueue'
-import {Task} from './Task'
+import {fsa, repeat, mkdirp, isDir, sanitizePath} from './util';
+import {Address} from './Address';
+import {TaskQueue} from './TaskQueue';
+import {Task} from './Task';
 
 // TODO: continue interrupted downloads.
 
 Promise.longStackTraces();
 
 export interface FetchOptions {
-	url?: string;
+	address?: Address;
 	forceHost?: string;
 	forcePort?: number;
 }
 
 export class CacheResult {
-	constructor(streamOut: stream.Readable, urlRemote: string) {
+	constructor(streamOut: stream.Readable, address: Address) {
 		this.stream = streamOut;
-		this.url = urlRemote;
+		this.address = address;
 	}
 
 	stream: stream.Readable;
-	url: string;
+	address: Address;
 }
 
 class FetchTask extends Task<CacheResult> {
@@ -51,7 +52,12 @@ class FetchTask extends Task<CacheResult> {
 				throw(err);
 			}
 
-			return(this.cache.fetchRemote(this.options, onFinish));
+			if(this.options.address.url) {
+				return(this.cache.fetchRemote(this.options, onFinish));
+			} else {
+				onFinish(err);
+				throw(err);
+			}
 		});
 
 		return(result);
@@ -70,18 +76,18 @@ export class Cache {
 
 	// Store HTTP redirects as files containing the new URL.
 
-	addLinks(redirectList: string[], target: string) {
-		return(Promise.map(redirectList, (src: string) => {
+	addLinks(redirectList: Address[], target: Address) {
+		return(Promise.map(redirectList, (src: Address) => {
 			this.createCachePath(src).then((cachePath: string) =>
-				fsa.writeFile(cachePath, 'LINK: ' + target + '\n', {encoding: 'utf-8'})
+				fsa.writeFile(cachePath, 'LINK: ' + target.uri + '\n', {encoding: 'utf-8'})
 			)
 		}));
 	}
 
-	getCachePathSync(urlRemote: string) {
+	getCachePathSync(address: Address) {
 		var cachePath = path.join(
 			this.pathBase,
-			sanitizePath(urlRemote.substr(urlRemote.indexOf(':') + 1))
+			address.path
 		);
 
 		return(cachePath);
@@ -89,8 +95,8 @@ export class Cache {
 
 	// Get local cache file path where a remote URL should be downloaded.
 
-	getCachePath(urlRemote: string) {
-		var cachePath = this.getCachePathSync(urlRemote);
+	getCachePath(address: Address) {
+		var cachePath = this.getCachePathSync(address);
 
 		var makeValidPath = (isDir: boolean) => {
 			if(isDir) cachePath = path.join(cachePath, this.indexName);
@@ -98,15 +104,15 @@ export class Cache {
 			return(cachePath);
 		};
 
-		if(urlRemote.charAt(urlRemote.length - 1) == '/') {
+		if(cachePath.charAt(cachePath.length - 1) == '/') {
 			return(Promise.resolve(makeValidPath(true)));
 		}
 
-		return(isDir(urlRemote).then(makeValidPath));
+		return(isDir(cachePath).then(makeValidPath));
 	}
 
-	ifCached(urlRemote: string) {
-		return(this.getCachePath(urlRemote).then((cachePath: string) =>
+	ifCached(uri: string) {
+		return(this.getCachePath(new Address(uri)).then((cachePath: string) =>
 			fsa.stat(cachePath)
 				.then((stats: fs.Stats) => !stats.isDirectory())
 				.catch((err: NodeJS.ErrnoException) => false)
@@ -115,8 +121,8 @@ export class Cache {
 
 	// Like getCachePath, but create the path if is doesn't exist.
 
-	createCachePath(urlRemote: string) {
-		return(this.getCachePath(urlRemote).then((cachePath: string) => {
+	createCachePath(address: Address) {
+		return(this.getCachePath(address).then((cachePath: string) => {
 			return(mkdirp(path.dirname(cachePath), this.indexName).then(() => cachePath));
 		}));
 	}
@@ -145,10 +151,8 @@ export class Cache {
 	  * for example an XML namespace.
 		* @return Promise resolving after all data is written. */
 
-	store(urlRemote: string, data: string) {
-		urlRemote = sanitizeUrl(urlRemote);
-
-		return(this.createCachePath(urlRemote).then((cachePath: string) =>
+	store(uri: string, data: string) {
+		return(this.createCachePath(new Address(uri)).then((cachePath: string) =>
 			fsa.writeFile(cachePath, data, {encoding: 'utf-8'})
 		));
 	}
@@ -159,7 +163,7 @@ export class Cache {
 
 	fetch(options: FetchOptions) {
 		return(this.fetchQueue.add(new FetchTask(this, {
-			url: sanitizeUrl(options.url),
+			address: options.address,
 			forceHost: options.forceHost,
 			forcePort: options.forcePort
 		})));
@@ -167,13 +171,12 @@ export class Cache {
 
 	fetchCached(options: FetchOptions, onFinish: (err?: NodeJS.ErrnoException) => void) {
 		// These fix atom-typescript syntax highlight: ))
-		var urlRemote = options.url;
 
 		// Any errors shouldn't be handled here, but instead in the caller.
 
-		var cachePath = this.getCachePath(urlRemote);
+		var cachePath = this.getCachePath(options.address);
 		var targetPath = cachePath.then(Cache.checkRemoteLink).then((urlRemote: string) => {
-			if(urlRemote) return(this.getCachePath(urlRemote));
+			if(urlRemote) return(this.getCachePath(options.address));
 			else return(cachePath);
 		});
 
@@ -186,16 +189,17 @@ export class Cache {
 
 			return(new CacheResult(
 				streamIn,
-				urlRemote
+				options.address
 			));
 		}));
 	}
 
 	fetchRemote(options: FetchOptions, onFinish: (err?: NodeJS.ErrnoException) => void) {
 		// These fix atom-typescript syntax highlight: ))
-		var urlRemote = options.url;
+		var address = options.address;
+		var urlRemote = address.url;
 
-		var redirectList: string[] = [];
+		var redirectList: Address[] = [];
 		var found = false;
 		var resolve: (result: any) => void;
 		var reject: (err: any) => void;
@@ -221,11 +225,12 @@ console.error(urlRemote);
 		var streamRequest = request.get({
 			url: Cache.forceRedirect(urlRemote, options),
 			followRedirect: (res: http.IncomingMessage) => {
-				redirectList.push(urlRemote);
+				redirectList.push(address);
 				urlRemote = url.resolve(urlRemote, res.headers.location);
+				address = new Address(urlRemote);
 
 				this.fetchCached({
-					url: urlRemote,
+					address: address,
 					forceHost: options.forceHost,
 					forcePort: options.forcePort
 				}, onFinish).then((result: CacheResult) => {
@@ -236,7 +241,7 @@ console.error(urlRemote);
 					if(found) return;
 					found = true;
 
-					this.addLinks(redirectList, urlRemote).finally(() => {
+					this.addLinks(redirectList, address).finally(() => {
 						resolve(result);
 					});
 				}).catch((err: NodeJS.ErrnoException) => {
@@ -286,7 +291,7 @@ console.error(urlRemote);
 
 			streamRequest.pause();
 
-			this.createCachePath(urlRemote).then((cachePath: string) => {
+			this.createCachePath(address).then((cachePath: string) => {
 				var streamOut = fs.createWriteStream(cachePath);
 
 				streamOut.on('finish', () => {
@@ -299,10 +304,10 @@ console.error(urlRemote);
 				streamRequest.pipe(streamBuffer, {end: true});
 				streamRequest.resume();
 
-				return(this.addLinks(redirectList, urlRemote).finally(() => {
+				return(this.addLinks(redirectList, address).finally(() => {
 					resolve(new CacheResult(
 						streamBuffer as any as stream.Readable,
-						urlRemote
+						address
 					));
 				}));
 			}).catch(die);

@@ -78,13 +78,19 @@ export class Cache {
 		}));
 	}
 
-	// Get local cache file path where a remote URL should be downloaded.
-
-	getCachePath(urlRemote: string) {
+	getCachePathSync(urlRemote: string) {
 		var cachePath = path.join(
 			this.pathBase,
 			sanitizePath(urlRemote.substr(urlRemote.indexOf(':') + 1))
 		);
+
+		return(cachePath);
+	}
+
+	// Get local cache file path where a remote URL should be downloaded.
+
+	getCachePath(urlRemote: string) {
+		var cachePath = this.getCachePathSync(urlRemote);
 
 		var makeValidPath = (isDir: boolean) => {
 			if(isDir) cachePath = path.join(cachePath, this.indexName);
@@ -97,6 +103,14 @@ export class Cache {
 		}
 
 		return(isDir(urlRemote).then(makeValidPath));
+	}
+
+	ifCached(urlRemote: string) {
+		return(this.getCachePath(urlRemote).then((cachePath: string) =>
+			fsa.stat(cachePath)
+				.then((stats: fs.Stats) => !stats.isDirectory())
+				.catch((err: NodeJS.ErrnoException) => false)
+		));
 	}
 
 	// Like getCachePath, but create the path if is doesn't exist.

@@ -1,4 +1,4 @@
-// This file is part of cget, copyright (c) 2015 BusFaster Ltd.
+// This file is part of cget, copyright (c) 2015-2016 BusFaster Ltd.
 // Released under the MIT license, see LICENSE.
 
 import * as fs from 'fs';
@@ -6,7 +6,7 @@ import * as url from 'url';
 import * as http from 'http';
 
 import {fsa, extend} from '../dist/cget/util';
-import {FetchOptions, Cache, CacheResult} from '../dist/cget/Cache';
+import {Address, Cache, CacheResult} from '../dist/cget';
 
 var cache = new Cache(process.argv[2], process.argv[3]);
 
@@ -57,7 +57,7 @@ var app = http.createServer((req: http.IncomingMessage, res: http.ServerResponse
 	urlParts.query = null;
 	urlParts.host = host;
 
-	var cachePath = cache.getCachePath(url.format(urlParts));
+	var cachePath = cache.getCachePath(new Address(url.format(urlParts)));
 
 	cachePath.then(Cache.checkRemoteLink).then((urlRemote: string) => {
 		if(urlRemote) {

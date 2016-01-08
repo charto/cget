@@ -1,4 +1,4 @@
-// This file is part of cget, copyright (c) 2015 BusFaster Ltd.
+// This file is part of cget, copyright (c) 2015-2016 BusFaster Ltd.
 // Released under the MIT license, see LICENSE.
 
 import * as fs from 'fs';
@@ -13,17 +13,11 @@ import * as Promise from 'bluebird';
 import {fsa, repeat, mkdirp, isDir, sanitizePath} from './util';
 import {Address} from './Address';
 import {TaskQueue} from './TaskQueue';
-import {Task} from './Task';
+import {FetchTask, FetchOptions} from './FetchTask';
 
 // TODO: continue interrupted downloads.
 
 Promise.longStackTraces();
-
-export interface FetchOptions {
-	address?: Address;
-	forceHost?: string;
-	forcePort?: number;
-}
 
 export class CacheResult {
 	constructor(streamOut: stream.Readable, address: Address) {
@@ -33,38 +27,6 @@ export class CacheResult {
 
 	stream: stream.Readable;
 	address: Address;
-}
-
-class FetchTask extends Task<CacheResult> {
-	constructor(cache: Cache, options: FetchOptions) {
-		super();
-
-		this.cache = cache;
-		this.options = options;
-	}
-
-	start(onFinish: (err?: NodeJS.ErrnoException) => void) {
-		// These fix atom-typescript syntax highlight: ))
-		var result = this.cache.fetchCached(this.options, onFinish).catch((err: NodeJS.ErrnoException) => {
-			// Re-throw unexpected errors.
-			if(err.code != 'ENOENT') {
-				onFinish(err);
-				throw(err);
-			}
-
-			if(this.options.address.url) {
-				return(this.cache.fetchRemote(this.options, onFinish));
-			} else {
-				onFinish(err);
-				throw(err);
-			}
-		});
-
-		return(result);
-	}
-
-	cache: Cache;
-	options: FetchOptions;
 }
 
 export class Cache {

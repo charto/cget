@@ -138,7 +138,7 @@ export class Cache {
 
 		var cachePath = this.getCachePath(options.address);
 		var targetPath = cachePath.then(Cache.checkRemoteLink).then((urlRemote: string) => {
-			if(urlRemote) return(this.getCachePath(options.address));
+			if(urlRemote) return(this.getCachePath(new Address(urlRemote)));
 			else return(cachePath);
 		});
 

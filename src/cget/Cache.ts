@@ -19,14 +19,18 @@ import {FetchTask, FetchOptions} from './FetchTask';
 
 Promise.longStackTraces();
 
+export type Headers = {[key: string]: string};
+
 export class CacheResult {
-	constructor(streamOut: stream.Readable, address: Address) {
+	constructor(streamOut: stream.Readable, address: Address, headers: Headers) {
 		this.stream = streamOut;
 		this.address = address;
+		this.headers = headers;
 	}
 
 	stream: stream.Readable;
 	address: Address;
+	headers: Headers;
 }
 
 export class Cache {
@@ -75,6 +79,10 @@ export class Cache {
 		}
 
 		return(isDir(cachePath).then(makeValidPath));
+	}
+
+	static getHeaderPath(cachePath: string) {
+		return(cachePath + '.header.json');
 	}
 
 	ifCached(uri: string) {
@@ -140,31 +148,46 @@ export class Cache {
 	fetchCached(options: FetchOptions, onFinish: (err?: NodeJS.ErrnoException) => void) {
 		// These fix atom-typescript syntax highlight: ))
 
+		var streamIn: fs.ReadStream;
+
 		// Any errors shouldn't be handled here, but instead in the caller.
 
-		var cachePath = this.getCachePath(options.address);
-		var targetPath = cachePath.then(Cache.checkRemoteLink).then((urlRemote: string) =>
-			urlRemote ? this.getCachePath(new Address(urlRemote)) : cachePath
-		);
+		return(
+			this.getCachePath(options.address).then((cachePath: string) =>
+				Cache.checkRemoteLink(cachePath).then((urlRemote: string) =>
+					urlRemote ? this.getCachePath(new Address(urlRemote)) : cachePath
+				)
+			).then((cachePath: string) => {
+				streamIn = fs.createReadStream(cachePath, { encoding: 'utf8'} );
 
-		return(targetPath.then((targetPath: string) => {
-			var streamIn = fs.createReadStream(targetPath, { encoding: 'utf8'} );
+				streamIn.on('end', () => {
+					onFinish();
+				});
 
-			streamIn.on('end', () => {
-				onFinish();
-			});
-
-			return(new CacheResult(
+				return(
+					fsa.readFile(
+						Cache.getHeaderPath(cachePath),
+						{ encoding: 'utf8' }
+					).then(
+						/** Parse headers stored as JSON. */
+						(data: string) => JSON.parse(data)
+					).catch(
+						/** If no headers are available, replace them with null. */
+						(err: NodeJS.ErrnoException) => null
+					)
+				);
+			}).then((headers: Headers) => new CacheResult(
 				streamIn,
-				options.address
-			));
-		}));
+				options.address,
+				headers
+			))
+		);
 	}
 
-	private storeHeaders(cachePath: string, res: http.IncomingMessage) {
+	private storeHeaders(cachePath: string, headers: Headers) {
 		return(fsa.writeFile(
-			cachePath + '.header.json',
-			JSON.stringify(res.headers),
+			Cache.getHeaderPath(cachePath),
+			JSON.stringify(headers),
 			{ encoding: 'utf8' }
 		));
 	}
@@ -280,10 +303,11 @@ console.error(urlRemote);
 				streamRequest.pipe(streamBuffer, {end: true});
 				streamRequest.resume();
 
-				return(Promise.join(this.addLinks(redirectList, address), this.storeHeaders(cachePath, res)).finally(() =>
+				return(Promise.join(this.addLinks(redirectList, address), this.storeHeaders(cachePath, res.headers)).finally(() =>
 					resolve(new CacheResult(
 						streamBuffer as any as stream.Readable,
-						address
+						address,
+						res.headers
 					))
 				));
 			}).catch(die);

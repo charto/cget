@@ -57,31 +57,35 @@ var app = http.createServer((req: http.IncomingMessage, res: http.ServerResponse
 	urlParts.query = null;
 	urlParts.host = host;
 
-	var cachePath = cache.getCachePath(new Address(url.format(urlParts)));
+	cache.getCachePath(new Address(url.format(urlParts))).then((cachePath: string) =>
+		Cache.checkRemoteLink(cachePath).then((urlRemote: string) => {
+			if(urlRemote) {
+				reportError(res, 302, {
+					'Location': urlRemote
+				});
 
-	cachePath.then(Cache.checkRemoteLink).then((urlRemote: string) => {
-		if(urlRemote) {
-			reportError(res, 302, {
-				'Location': urlRemote
+				return;
+			}
+
+			var headerPath = cachePath + '.header.json';
+
+			fsa.stat(cachePath).then((contentStats: fs.Stats) => {
+				fsa.stat(headerPath).then((headerStats: fs.Stats) =>
+					fsa.readFile(headerPath, { encoding: 'utf8' }).then(JSON.parse)
+				).catch((err: NodeJS.ErrnoException) => ({
+					'Content-Type': 'text/plain;charset=utf-8',
+					'Content-Length': contentStats.size
+				})).then((header: any) => {
+					res.writeHead(200, header);
+
+					fs.createReadStream(cachePath).pipe(res);
+				});
+			}).catch((err: NodeJS.ErrnoException) => {
+				console.log('404: ' + req.url);
+				reportError(res, 404);
 			});
-
-			return;
-		}
-
-		fsa.stat(cachePath.value()).then((stats: fs.Stats) => {
-			var header = {
-				'Content-Type': 'text/plain;charset=utf-8',
-				'Content-Length': stats.size
-			};
-
-			res.writeHead(200, header);
-
-			fs.createReadStream(cachePath.value()).pipe(res);
-		});
-	}).catch((err: NodeJS.ErrnoException) => {
-		console.log('404: ' + req.url);
-		reportError(res, 404);
-	});
+		})
+	);
 });
 
 app.listen(12345);

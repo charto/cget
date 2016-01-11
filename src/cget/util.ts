@@ -18,7 +18,7 @@ export var fsa = {
 	mkdir: Promise.promisify(fs.mkdir),
 	read: Promise.promisify(fs.read),
 	readFile: Promise.promisify(fs.readFile) as any as (name: string, options: {encoding: string; flag?: string;}) => Promise<string>,
-	writeFile: Promise.promisify(fs.writeFile) as (name: string, content: string, options: {encoding: string; flag?: string;}) => void
+	writeFile: Promise.promisify(fs.writeFile) as (name: string, content: string, options: {encoding: string; flag?: string;}) => Promise<{}>
 };
 
 var againSymbol = {};

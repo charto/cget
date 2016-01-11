@@ -143,7 +143,7 @@ export class Cache {
 		});
 
 		return(targetPath.then((targetPath: string) => {
-			var streamIn = fs.createReadStream(targetPath, {encoding: null});
+			var streamIn = fs.createReadStream(targetPath, {encoding: 'utf8'});
 
 			streamIn.on('end', () => {
 				onFinish();
@@ -154,6 +154,14 @@ export class Cache {
 				options.address
 			));
 		}));
+	}
+
+	private storeHeaders(cachePath: string, res: http.IncomingMessage) {
+		return(fsa.writeFile(
+			cachePath + '.header.json',
+			JSON.stringify(res.headers),
+			{ encoding: 'utf8' }
+		));
 	}
 
 	fetchRemote(options: FetchOptions, onFinish: (err?: NodeJS.ErrnoException) => void) {
@@ -186,6 +194,7 @@ console.error(urlRemote);
 
 		var streamRequest = request.get({
 			url: Cache.forceRedirect(urlRemote, options),
+			encoding: 'utf8',
 			followRedirect: (res: http.IncomingMessage) => {
 				redirectList.push(address);
 				urlRemote = url.resolve(urlRemote, res.headers.location);
@@ -266,7 +275,7 @@ console.error(urlRemote);
 				streamRequest.pipe(streamBuffer, {end: true});
 				streamRequest.resume();
 
-				return(this.addLinks(redirectList, address).finally(() => {
+				return(Promise.join(this.addLinks(redirectList, address), this.storeHeaders(cachePath, res)).finally(() => {
 					resolve(new CacheResult(
 						streamBuffer as any as stream.Readable,
 						address

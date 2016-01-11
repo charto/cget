@@ -41,7 +41,11 @@ export class Cache {
 	addLinks(redirectList: Address[], target: Address) {
 		return(Promise.map(redirectList, (src: Address) => {
 			this.createCachePath(src).then((cachePath: string) =>
-				fsa.writeFile(cachePath, 'LINK: ' + target.uri + '\n', {encoding: 'utf8'})
+				fsa.writeFile(
+					cachePath,
+					'LINK: ' + target.uri + '\n',
+					{ encoding: 'utf8' }
+				)
 			)
 		}));
 	}
@@ -84,29 +88,27 @@ export class Cache {
 	// Like getCachePath, but create the path if is doesn't exist.
 
 	createCachePath(address: Address) {
-		return(this.getCachePath(address).then((cachePath: string) => {
-			return(mkdirp(path.dirname(cachePath), this.indexName).then(() => cachePath));
-		}));
+		return(this.getCachePath(address).then((cachePath: string) =>
+			mkdirp(path.dirname(cachePath), this.indexName).then(() => cachePath)
+		));
 	}
 
 	// Check if there's a cached link redirecting the URL.
 
 	static checkRemoteLink(cachePath: string) {
-		return(fsa.open(cachePath, 'r').then((fd: number) => {
-			var buf = new Buffer(6);
+		var buf = new Buffer(6);
 
-			return(fsa.read(fd, buf, 0, 6, 0).then(() => {
+		return(fsa.open(cachePath, 'r').then((fd: number) =>
+			fsa.read(fd, buf, 0, 6, 0).then(() => {
 				fsa.close(fd);
 
 				if(buf.equals(new Buffer('LINK: ', 'ascii'))) {
-					return(fsa.readFile(cachePath, {encoding: 'utf8'}).then((link: string) => {
-						var urlRemote = link.substr(6).replace(/\s+$/, '');
-
-						return(urlRemote);
-					}));
+					return(fsa.readFile(cachePath, { encoding: 'utf8'} ).then((link: string) =>
+						link.substr(6).replace(/\s+$/, '')
+					));
 				} else return(null);
-			}));
-		}));
+			})
+		));
 	}
 
 	/** Store custom data related to a URL-like address,
@@ -115,7 +117,11 @@ export class Cache {
 
 	store(uri: string, data: string) {
 		return(this.createCachePath(new Address(uri)).then((cachePath: string) =>
-			fsa.writeFile(cachePath, data, {encoding: 'utf8'})
+			fsa.writeFile(
+				cachePath,
+				data,
+				{ encoding: 'utf8' }
+			)
 		));
 	}
 
@@ -137,13 +143,12 @@ export class Cache {
 		// Any errors shouldn't be handled here, but instead in the caller.
 
 		var cachePath = this.getCachePath(options.address);
-		var targetPath = cachePath.then(Cache.checkRemoteLink).then((urlRemote: string) => {
-			if(urlRemote) return(this.getCachePath(new Address(urlRemote)));
-			else return(cachePath);
-		});
+		var targetPath = cachePath.then(Cache.checkRemoteLink).then((urlRemote: string) =>
+			urlRemote ? this.getCachePath(new Address(urlRemote)) : cachePath
+		);
 
 		return(targetPath.then((targetPath: string) => {
-			var streamIn = fs.createReadStream(targetPath, {encoding: 'utf8'});
+			var streamIn = fs.createReadStream(targetPath, { encoding: 'utf8'} );
 
 			streamIn.on('end', () => {
 				onFinish();
@@ -275,12 +280,12 @@ console.error(urlRemote);
 				streamRequest.pipe(streamBuffer, {end: true});
 				streamRequest.resume();
 
-				return(Promise.join(this.addLinks(redirectList, address), this.storeHeaders(cachePath, res)).finally(() => {
+				return(Promise.join(this.addLinks(redirectList, address), this.storeHeaders(cachePath, res)).finally(() =>
 					resolve(new CacheResult(
 						streamBuffer as any as stream.Readable,
 						address
-					));
-				}));
+					))
+				));
 			}).catch(die);
 		});
 

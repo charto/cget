@@ -78,12 +78,12 @@ var app = http.createServer((req: http.IncomingMessage, res: http.ServerResponse
 				})).then((header: any) => {
 					res.writeHead(200, header);
 
-					fs.createReadStream(cachePath).pipe(res);
+					fs.createReadStream(cachePath, { encoding: null }).pipe(res);
 				});
-			}).catch((err: NodeJS.ErrnoException) => {
-				console.log('404: ' + req.url);
-				reportError(res, 404);
 			});
+		}).catch((err: NodeJS.ErrnoException) => {
+			console.log('404: ' + req.url);
+			reportError(res, 404);
 		})
 	);
 });

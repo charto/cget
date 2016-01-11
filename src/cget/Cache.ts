@@ -158,7 +158,7 @@ export class Cache {
 					urlRemote ? this.getCachePath(new Address(urlRemote)) : cachePath
 				)
 			).then((cachePath: string) => {
-				streamIn = fs.createReadStream(cachePath, { encoding: 'utf8'} );
+				streamIn = fs.createReadStream(cachePath, { encoding: null } );
 
 				streamIn.on('end', () => {
 					onFinish();
@@ -222,7 +222,7 @@ console.error(urlRemote);
 
 		var streamRequest = request.get({
 			url: Cache.forceRedirect(urlRemote, options),
-			encoding: 'utf8',
+			encoding: null,
 			followRedirect: (res: http.IncomingMessage) => {
 				redirectList.push(address);
 				urlRemote = url.resolve(urlRemote, res.headers.location);

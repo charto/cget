@@ -6,7 +6,9 @@
   "typings": "dist/cget.d.ts",
   "browser": "dist/browser.js",
   "scripts": {
-    "prepublish": "tsd install && tsc -p src && tsc -p src/tsconfig-browser.json && tsc -p test",
+    "tsc": "tsc",
+    "tsd": "tsd",
+    "prepublish": "tsd install && tsc -p src",
     "test": "node test/serve.js test/cache index.html"
   },
   "author": "Juha Järvi",
@@ -34,6 +36,6 @@
   },
   "devDependencies": {
     "tsd": "~0.6.5",
-    "typescript": "^1.8.0-dev.20151204"
+    "typescript": "~1.8.0-dev.20160114"
   }
 }

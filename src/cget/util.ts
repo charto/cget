@@ -149,5 +149,10 @@ export function sanitizeUrl(urlRemote: string) {
 	if(urlParts.pathname.charAt(0) != '/') origin += '/';
 
 	origin += urlParts.pathname;
-	return((urlParts.protocol || 'http:') + '//' + url.resolve('', origin));
+	return([
+		urlParts.protocol || 'http:',
+		'//',
+		url.resolve('', origin),
+		urlParts.search || ''
+	].join(''));
 }

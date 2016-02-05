@@ -1,6 +1,8 @@
 // This file is part of cget, copyright (c) 2015-2016 BusFaster Ltd.
 // Released under the MIT license, see LICENSE.
 
+import * as Promise from 'bluebird';
+
 import {Address} from './Address';
 import {Cache, CacheResult} from './Cache';
 import {Task} from './Task';

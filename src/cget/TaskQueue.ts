@@ -1,6 +1,8 @@
 // This file is part of cget, copyright (c) 2015 BusFaster Ltd.
 // Released under the MIT license, see LICENSE.
 
+import * as Promise from 'bluebird';
+
 import {Task} from './Task'
 
 export class TaskQueue {

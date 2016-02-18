@@ -121,7 +121,7 @@ export class Cache {
 
 	/** Store custom data related to a URL-like address,
 	  * for example an XML namespace.
-		* @return Promise resolving after all data is written. */
+	  * @return Promise resolving to true after all data is written. */
 
 	store(uri: string, data: string) {
 		return(this.createCachePath(new Address(uri)).then((cachePath: string) =>
@@ -130,7 +130,7 @@ export class Cache {
 				data,
 				{ encoding: 'utf8' }
 			)
-		));
+		).then(() => true));
 	}
 
 	/** Fetch URL from cache or download it if not available yet.

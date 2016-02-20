@@ -31,11 +31,11 @@
     "server"
   ],
   "dependencies": {
-    "bluebird": "~3.2.2",
+    "bluebird": "~3.3.3",
     "request": "~2.69.0"
   },
   "devDependencies": {
-    "typescript": "~1.9.0-dev.20160205",
-    "typings": "~0.6.6"
+    "typescript": "~1.8.7",
+    "typings": "~0.6.9"
   }
 }

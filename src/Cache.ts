@@ -10,13 +10,13 @@ import * as stream from 'stream';
 import * as request from 'request';
 import * as Promise from 'bluebird';
 
-import {fsa, mkdirp, isDir} from './mkdirp';
-import {Address} from './Address';
 import {TaskQueue} from 'cwait';
 
-// TODO: continue interrupted downloads.
+import {fsa, mkdirp, isDir} from './mkdirp';
+import {Address} from './Address';
 
-Promise.longStackTraces();
+// TODO: continue interrupted downloads.
+// TODO: handle redirect loops.
 
 export interface FetchOptions {
 	forceHost?: string;
@@ -223,7 +223,6 @@ export class Cache {
 	}
 
 	fetchRemote(address: Address, options: FetchOptions, resolveTask: () => void, rejectTask: (err?: NodeJS.ErrnoException) => void) {
-		// These fix atom-typescript syntax highlight: ))
 		var urlRemote = address.url!;
 
 		var redirectList: Address[] = [];
@@ -238,10 +237,12 @@ export class Cache {
 		function die(err: NodeJS.ErrnoException) {
 			// Abort and report.
 			if(streamRequest) streamRequest.abort();
-console.error('Got error:');
-console.error(err);
-console.error('Downloading URL:');
-console.error(urlRemote);
+
+			console.error('Got error:');
+			console.error(err);
+			console.error('Downloading URL:');
+			console.error(urlRemote);
+
 			reject(err);
 			rejectTask(err);
 			throw(err);

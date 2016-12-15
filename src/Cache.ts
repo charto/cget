@@ -56,17 +56,13 @@ export class Cache {
 		this.forcePort = options.forcePort;
 	}
 
-	// Store HTTP redirects as files containing the new URL.
-	// TODO: should just store the headers instead!
+	/** Store HTTP redirect headers with the final target address. */
 
-	addLinks(redirectList: Address[], target: Address) {
-		return(Promise.map(redirectList, (src: Address) => {
-			this.createCachePath(src).then((cachePath: string) =>
-				fsa.writeFile(
-					cachePath,
-					'LINK: ' + target.uri + '\n',
-					{ encoding: 'utf8' }
-				)
+	addLinks(redirectList: { address: Address, headers: Headers }[], target: Address) {
+		return(Promise.map(redirectList, ({ address: address, headers: headers }) => {
+			headers['cget-target'] = target.uri;
+			this.createCachePath(address).then((cachePath: string) =>
+				this.storeHeaders(cachePath, headers)
 			)
 		}));
 	}
@@ -228,7 +224,7 @@ export class Cache {
 	fetchRemote(address: Address, options: FetchOptions, resolveTask: () => void, rejectTask: (err?: NodeJS.ErrnoException) => void) {
 		var urlRemote = address.url!;
 
-		var redirectList: Address[] = [];
+		var redirectList: { address: Address, headers: Headers }[] = [];
 		var found = false;
 		var resolve: (result: any) => void;
 		var reject: (err: any) => void;
@@ -257,7 +253,11 @@ export class Cache {
 			url: Cache.forceRedirect(urlRemote, options),
 			encoding: null,
 			followRedirect: (res: http.IncomingMessage) => {
-				redirectList.push(address);
+				redirectList.push({
+					address: address,
+					headers: res.headers
+				});
+
 				urlRemote = url.resolve(urlRemote, res.headers.location);
 				address = new Address(urlRemote);
 

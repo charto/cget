@@ -24,7 +24,6 @@ export interface FetchOptions {
 }
 
 export interface CacheOptions extends FetchOptions {
-	basePath?: string;
 	indexName?: string;
 	concurrency?: number;
 }
@@ -51,7 +50,7 @@ export class Cache {
 	constructor(basePath: string, options?: CacheOptions) {
 		if(!options) options = {};
 
-		this.basePath = path.resolve(options.basePath || 'cache');
+		this.basePath = path.resolve(basePath || 'cache');
 		this.indexName = options.indexName || 'index.html';
 		this.fetchQueue = new TaskQueue(Promise, options.concurrency || 2);
 
@@ -215,8 +214,8 @@ export class Cache {
 						/** Parse headers stored as JSON. */
 						(data: string) => JSON.parse(data)
 					).catch(
-						/** If no headers are available, replace them with null. */
-						(err: NodeJS.ErrnoException) => null
+						/** If headers are not found, invent some. */
+						(err: NodeJS.ErrnoException) => ({ 'cget-status': 200 })
 					)
 				));
 

@@ -5,6 +5,8 @@ cget
 
 `cget` is a robust streaming parallel download manager with a filesystem cache.
 
+These docs are relevant to the new version under construction on Github, not yet published on NPM.
+
 Features
 --------
 
@@ -66,7 +68,15 @@ The second time it prints the exact same output, but without needing a network c
 Caching arbitrary files
 -----------------------
 
-`cget` supports any URI (URL or URN) as the cache key.
+The `store` method supports caching a string with any URI (URL or URN) as the key:
+
+```JavaScript
+var cache = new (require('cget').Cache)();
+
+cache.store('urn:x-inspire:specification:gmlas:GeographicalNames:3.0', 'Some data');
+
+cache.store('http://inspire.ec.europa.eu/schemas/ad/4.0', 'More data');
+```
 
 License
 =======

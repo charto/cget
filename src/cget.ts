@@ -1,6 +1,2 @@
-import * as _util from './cget/util';
-export {Cache, CacheResult} from './cget/Cache';
-export {FetchOptions} from './cget/FetchTask';
-export {Address} from './cget/Address';
-
-export var util = _util;
+export {Address} from './Address';
+export {FetchOptions, Cache, CacheResult} from './Cache';

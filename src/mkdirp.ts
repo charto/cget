@@ -4,18 +4,16 @@
 // Define some simple utility functions to avoid depending on other packages.
 
 import * as fs from 'fs';
-import * as url from 'url';
 import * as path from 'path';
 import * as Promise from 'bluebird';
 
 /** Asynchronous versions of fs methods, wrapped by Bluebird. */
 
-export var fsa = {
+export const fsa = {
 	stat: Promise.promisify(fs.stat),
 	open: Promise.promisify(fs.open),
-	close: Promise.promisify(fs.close),
-	rename: Promise.promisify(fs.rename),
-	mkdir: Promise.promisify(fs.mkdir),
+	rename: Promise.promisify(fs.rename) as any as (src: string, dst: string) => Promise<{}>,
+	mkdir: Promise.promisify(fs.mkdir) as (name: string) => Promise<{}>,
 	read: Promise.promisify(fs.read),
 	readFile: Promise.promisify(fs.readFile) as any as (name: string, options: {encoding: string; flag?: string;}) => Promise<string>,
 	writeFile: Promise.promisify(fs.writeFile) as (name: string, content: string, options: {encoding: string; flag?: string;}) => Promise<{}>
@@ -26,28 +24,12 @@ var again = () => againSymbol;
 
 /** Promise while loop. */
 
-export function repeat<T>(fn: (again: () => {}) => Promise<T>): Promise<T> {
+export function repeat<T>(fn: (again: () => {}) => Promise<T> | undefined): Promise<T> {
 	return(Promise.try(() =>
-		fn(again)
+		fn(again)!
 	).then((result: T) =>
 		(result == againSymbol) ? repeat(fn) : result
 	));
-}
-
-/** Copy all members of src object to dst object. */
-
-export function extend(dst: {[key: string]: any}, src: {[key: string]: any}) {
-	for(var key of Object.keys(src)) {
-		dst[key] = src[key];
-	}
-
-	return(dst);
-}
-
-/** Make shallow clone of object. */
-
-export function clone(src: Object) {
-	return(extend({}, src));
 }
 
 /** Create a new directory and its parent directories.
@@ -83,6 +65,8 @@ export function mkdirp(pathName: string, indexName: string) {
 			} else if(!stats.isDirectory()) {
 				throw(new Error('Tried to create a directory inside something weird: ' + pathPrefix));
 			}
+
+			return(null as any as {});
 		}).catch((err: NodeJS.ErrnoException) => {
 			// Re-throw unexpected errors.
 			if(err.code != 'ENOENT' && err.code != 'ENOTDIR') throw(err);
@@ -121,38 +105,10 @@ export function makeTempSuffix(length: number) {
 	)
 }
 
-export function sanitizePath(path: string) {
-	return(path
-		// Remove unwanted characters.
-		.replace(/[^-_./0-9A-Za-z]/g, '_')
-
-		// Remove - _ . / from beginnings of path parts.
-		.replace(/(^|\/)[-_./]+/g, '$1')
-
-		// Remove - _ . / from endings of path parts.
-		.replace(/[-_./]+($|\/)/g, '$1')
-	);
-}
-
 export function isDir(cachePath: string) {
 	return(fsa.stat(cachePath).then(
 		(stats: fs.Stats) => stats.isDirectory()
 	).catch(
 		(err: NodeJS.ErrnoException) => false
 	));
-}
-
-export function sanitizeUrl(urlRemote: string) {
-	var urlParts = url.parse(urlRemote, false, true);
-	var origin = urlParts.host;
-
-	if(urlParts.pathname.charAt(0) != '/') origin += '/';
-
-	origin += urlParts.pathname;
-	return([
-		urlParts.protocol || 'http:',
-		'//',
-		url.resolve('', origin),
-		urlParts.search || ''
-	].join(''));
 }

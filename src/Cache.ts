@@ -10,16 +10,26 @@ import * as stream from 'stream';
 import * as request from 'request';
 import * as Promise from 'bluebird';
 
-import {fsa, repeat, mkdirp, isDir, sanitizePath} from './util';
+import {fsa, mkdirp, isDir} from './mkdirp';
 import {Address} from './Address';
-import {TaskQueue} from './TaskQueue';
-import {FetchTask, FetchOptions} from './FetchTask';
+import {TaskQueue} from 'cwait';
 
 // TODO: continue interrupted downloads.
 
 Promise.longStackTraces();
 
-export type Headers = {[key: string]: string};
+export interface FetchOptions {
+	forceHost?: string;
+	forcePort?: number;
+}
+
+export interface CacheOptions extends FetchOptions {
+	basePath?: string;
+	indexName?: string;
+	concurrency?: number;
+}
+
+export type Headers = { [key: string]: string };
 
 export class CacheResult {
 	constructor(streamOut: stream.Readable, address: Address, headers: Headers) {
@@ -35,12 +45,16 @@ export class CacheResult {
 
 export class Cache {
 
-	constructor(pathBase: string, indexName: string) {
-		this.pathBase = path.resolve(pathBase);
-		this.indexName = indexName;
+	constructor(basePath: string, options?: CacheOptions) {
+		if(!options) options = {};
+
+		this.basePath = path.resolve(options.basePath || 'cache');
+		this.indexName = options.indexName || 'index.html';
+		this.fetchQueue = new TaskQueue(Promise, options.concurrency || 2);
 	}
 
 	// Store HTTP redirects as files containing the new URL.
+	// TODO: should just store the headers instead!
 
 	addLinks(redirectList: Address[], target: Address) {
 		return(Promise.map(redirectList, (src: Address) => {
@@ -56,7 +70,7 @@ export class Cache {
 
 	getCachePathSync(address: Address) {
 		var cachePath = path.join(
-			this.pathBase,
+			this.basePath,
 			address.path
 		);
 
@@ -85,7 +99,7 @@ export class Cache {
 		return(cachePath + '.header.json');
 	}
 
-	ifCached(uri: string) {
+	isCached(uri: string) {
 		return(this.getCachePath(new Address(uri)).then((cachePath: string) =>
 			fsa.stat(cachePath)
 				.then((stats: fs.Stats) => !stats.isDirectory())
@@ -108,13 +122,13 @@ export class Cache {
 
 		return(fsa.open(cachePath, 'r').then((fd: number) =>
 			fsa.read(fd, buf, 0, 6, 0).then(() => {
-				fsa.close(fd);
+				fs.close(fd, () => {});
 
 				if(buf.equals(new Buffer('LINK: ', 'ascii'))) {
 					return(fsa.readFile(cachePath, { encoding: 'utf8'} ).then((link: string) =>
 						link.substr(6).replace(/\s+$/, '')
 					));
-				} else return(null);
+				} else return(null as any as {});
 			})
 		));
 	}
@@ -137,32 +151,48 @@ export class Cache {
 	 * Returns the file's URL after redirections
 	 * and a readable stream of its contents. */
 
-	fetch(options: FetchOptions) {
-		return(this.fetchQueue.add(new FetchTask(this, {
-			address: options.address,
-			forceHost: options.forceHost,
-			forcePort: options.forcePort
-		})));
+	fetch(uri: string, options?: FetchOptions) {
+		const address = new Address(uri);
+		if(!options) options = {};
+
+		return(new Promise((resolve, reject) =>
+			this.fetchQueue.add(() => new Promise((resolveTask, rejectTask) =>
+				this.fetchCached(
+					address,
+					options!,
+					resolveTask
+				).catch((err: NodeJS.ErrnoException) => {
+					// Re-throw unexpected errors.
+					if(err.code != 'ENOENT') {
+						rejectTask(err);
+						throw(err);
+					}
+
+					if(address.url) {
+						return(this.fetchRemote(address, options!, resolveTask, rejectTask));
+					} else {
+						rejectTask(err);
+						throw(err);
+					}
+				}).then(resolve, reject)
+			))
+		));
 	}
 
-	fetchCached(options: FetchOptions, onFinish: (err?: NodeJS.ErrnoException) => void) {
-		// These fix atom-typescript syntax highlight: ))
-
+	fetchCached(address: Address, options: FetchOptions, resolveTask: () => void) {
 		var streamIn: fs.ReadStream;
 
 		// Any errors shouldn't be handled here, but instead in the caller.
 
 		return(
-			this.getCachePath(options.address).then((cachePath: string) =>
+			this.getCachePath(address).then((cachePath: string) =>
 				Cache.checkRemoteLink(cachePath).then((urlRemote: string) =>
 					urlRemote ? this.getCachePath(new Address(urlRemote)) : cachePath
 				)
 			).then((cachePath: string) => {
-				streamIn = fs.createReadStream(cachePath, { encoding: null } );
+				streamIn = fs.createReadStream(cachePath);
 
-				streamIn.on('end', () => {
-					onFinish();
-				});
+				streamIn.on('end', resolveTask);
 
 				return(
 					fsa.readFile(
@@ -178,7 +208,7 @@ export class Cache {
 				);
 			}).then((headers: Headers) => new CacheResult(
 				streamIn,
-				options.address,
+				address,
 				headers
 			))
 		);
@@ -192,10 +222,9 @@ export class Cache {
 		));
 	}
 
-	fetchRemote(options: FetchOptions, onFinish: (err?: NodeJS.ErrnoException) => void) {
+	fetchRemote(address: Address, options: FetchOptions, resolveTask: () => void, rejectTask: (err?: NodeJS.ErrnoException) => void) {
 		// These fix atom-typescript syntax highlight: ))
-		var address = options.address;
-		var urlRemote = address.url;
+		var urlRemote = address.url!;
 
 		var redirectList: Address[] = [];
 		var found = false;
@@ -214,7 +243,7 @@ console.error(err);
 console.error('Downloading URL:');
 console.error(urlRemote);
 			reject(err);
-			onFinish(err);
+			rejectTask(err);
 			throw(err);
 		}
 
@@ -228,11 +257,7 @@ console.error(urlRemote);
 				urlRemote = url.resolve(urlRemote, res.headers.location);
 				address = new Address(urlRemote);
 
-				this.fetchCached({
-					address: address,
-					forceHost: options.forceHost,
-					forcePort: options.forcePort
-				}, onFinish).then((result: CacheResult) => {
+				this.fetchCached(address, options, resolveTask).then((result: CacheResult) => {
 					// File was already found in cache so stop downloading.
 
 					streamRequest.abort();
@@ -259,7 +284,7 @@ console.error(urlRemote);
 			if((
 				'EAI_AGAIN ECONNREFUSED ECONNRESET EHOSTUNREACH ' +
 				'ENOTFOUND EPIPE ESOCKETTIMEDOUT ETIMEDOUT '
-			).indexOf(err.code) < 0) {
+			).indexOf(err.code || '') < 0) {
 				die(err);
 			}
 
@@ -272,7 +297,7 @@ console.error(urlRemote);
 			if(found) return;
 			found = true;
 
-			var code = res.statusCode;
+			const code = res.statusCode;
 
 			if(code != 200) {
 				if(code < 500 || code >= 600) {
@@ -285,7 +310,7 @@ console.error(urlRemote);
 
 				console.error('SHOULD RETRY');
 
-				throw(err);
+				throw(new Error('RETRY'));
 			}
 
 			streamRequest.pause();
@@ -313,14 +338,12 @@ console.error(urlRemote);
 			}).catch(die);
 		});
 
-		streamRequest.on('end', () => {
-			onFinish();
-		});
+		streamRequest.on('end', resolveTask);
 
 		if(options.forceHost || options.forcePort) {
 			// Monkey-patch request to support forceHost when running tests.
 
-			(streamRequest as any).chartoOptions = options;
+			(streamRequest as any).cgetOptions = options;
 		}
 
 		return(promise);
@@ -346,15 +369,15 @@ console.error(urlRemote);
 
 		if(!changed) return(urlRemote);
 
-		urlParts.search = '?host=' + encodeURIComponent(urlParts.host);
-		urlParts.host = null;
+		urlParts.search = '?host=' + encodeURIComponent(urlParts.host || '');
+		urlParts.host = null as any;
 
 		return(url.format(urlParts));
 	}
 
-	fetchQueue = new TaskQueue();
+	fetchQueue: TaskQueue<Promise<any>>;
 
-	pathBase: string;
+	basePath: string;
 	indexName: string;
 
 	// Monkey-patch request to support forceHost when running tests.
@@ -364,9 +387,9 @@ console.error(urlRemote);
 
 		var func = proto.redirectTo;
 
-		proto.redirectTo = function() {
+		proto.redirectTo = function(this: any) {
 			var urlRemote = func.apply(this, Array.prototype.slice.apply(arguments));
-			var options: FetchOptions = this.request.chartoOptions;
+			var options: FetchOptions = this.request.cgetOptions;
 
 			if(urlRemote && options) return(Cache.forceRedirect(urlRemote, options));
 

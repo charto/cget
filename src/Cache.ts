@@ -51,6 +51,9 @@ export class Cache {
 		this.basePath = path.resolve(options.basePath || 'cache');
 		this.indexName = options.indexName || 'index.html';
 		this.fetchQueue = new TaskQueue(Promise, options.concurrency || 2);
+
+		this.forceHost = options.forceHost;
+		this.forcePort = options.forcePort;
 	}
 
 	// Store HTTP redirects as files containing the new URL.
@@ -341,10 +344,13 @@ export class Cache {
 
 		streamRequest.on('end', resolveTask);
 
-		if(options.forceHost || options.forcePort) {
+		if(options.forceHost || options.forcePort || this.forceHost || this.forcePort) {
 			// Monkey-patch request to support forceHost when running tests.
 
-			(streamRequest as any).cgetOptions = options;
+			(streamRequest as any).cgetOptions = {
+				forceHost: options.forceHost || this.forceHost,
+				forcePort: options.forcePort || this.forcePort
+			};
 		}
 
 		return(promise);
@@ -380,6 +386,9 @@ export class Cache {
 
 	basePath: string;
 	indexName: string;
+
+	forceHost?: string;
+	forcePort?: number;
 
 	// Monkey-patch request to support forceHost when running tests.
 

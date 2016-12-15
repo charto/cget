@@ -29,17 +29,20 @@ export interface CacheOptions extends FetchOptions {
 	concurrency?: number;
 }
 
+export type InternalHeaders = { [key: string]: number | string };
 export type Headers = { [key: string]: string };
 
 export class CacheResult {
-	constructor(streamOut: stream.Readable, address: Address, headers: Headers) {
+	constructor(streamOut: stream.Readable, address: Address, status: number, headers: Headers) {
 		this.stream = streamOut;
 		this.address = address;
 		this.headers = headers;
+		this.status = status;
 	}
 
 	stream: stream.Readable;
 	address: Address;
+	status: number;
 	headers: Headers;
 }
 
@@ -58,11 +61,13 @@ export class Cache {
 
 	/** Store HTTP redirect headers with the final target address. */
 
-	addLinks(redirectList: { address: Address, headers: Headers }[], target: Address) {
-		return(Promise.map(redirectList, ({ address: address, headers: headers }) => {
-			headers['cget-target'] = target.uri;
+	addLinks(redirectList: { address: Address, status: number, headers: Headers }[], target: Address) {
+		return(Promise.map(redirectList, ({ address: address, status: status, headers: headers }) => {
 			this.createCachePath(address).then((cachePath: string) =>
-				this.storeHeaders(cachePath, headers)
+				this.storeHeaders(cachePath, headers, {
+					'cget-status': status,
+					'cget-target': target.uri
+				})
 			)
 		}));
 	}
@@ -116,20 +121,23 @@ export class Cache {
 
 	// Check if there's a cached link redirecting the URL.
 
-	static checkRemoteLink(cachePath: string) {
-		var buf = new Buffer(6);
+	static getRedirect(cachePath: string) {
+		return(
+			fsa.readFile(
+				Cache.getHeaderPath(cachePath),
+				{ encoding: 'utf8' }
+			).then((data: string) => {
+				// Parse headers stored as JSON.
+				const headers = JSON.parse(data);
+				const status = headers['cget-status'];
 
-		return(fsa.open(cachePath, 'r').then((fd: number) =>
-			fsa.read(fd, buf, 0, 6, 0).then(() => {
-				fs.close(fd, () => {});
+				if(status >= 300 && status <= 308 && headers.location) {
+					return(headers['cget-target'] || headers.location);
+				}
 
-				if(buf.equals(new Buffer('LINK: ', 'ascii'))) {
-					return(fsa.readFile(cachePath, { encoding: 'utf8'} ).then((link: string) =>
-						link.substr(6).replace(/\s+$/, '')
-					));
-				} else return(null as any as {});
-			})
-		));
+				return(null);
+			}).catch(() => null as any as {})
+		);
 	}
 
 	/** Store custom data related to a URL-like address,
@@ -185,15 +193,14 @@ export class Cache {
 
 		return(
 			this.getCachePath(address).then((cachePath: string) =>
-				Cache.checkRemoteLink(cachePath).then((urlRemote: string) =>
+				Cache.getRedirect(cachePath).then((urlRemote: string) =>
 					urlRemote ? this.getCachePath(new Address(urlRemote)) : cachePath
 				)
-			).then((cachePath: string) => {
+			).then((cachePath: string) => new Promise((resolve, reject) => {
 				streamIn = fs.createReadStream(cachePath);
 
-				streamIn.on('end', resolveTask);
-
-				return(
+				// Resolve promise with headers if stream opens successfully.
+				streamIn.on('open', () => resolve(
 					fsa.readFile(
 						Cache.getHeaderPath(cachePath),
 						{ encoding: 'utf8' }
@@ -204,19 +211,29 @@ export class Cache {
 						/** If no headers are available, replace them with null. */
 						(err: NodeJS.ErrnoException) => null
 					)
-				);
-			}).then((headers: Headers) => new CacheResult(
+				));
+
+				// Cached file doesn't exist.
+				streamIn.on('error', reject);
+
+				streamIn.on('end', resolveTask);
+			})).then((headers: InternalHeaders) => new CacheResult(
 				streamIn,
 				address,
-				headers
+				headers['cget-status'] as number,
+				Cache.removeInternalHeaders(headers)
 			))
 		);
 	}
 
-	private storeHeaders(cachePath: string, headers: Headers) {
+	private storeHeaders(cachePath: string, headers: Headers, extra: InternalHeaders ) {
+		for(let key of Object.keys(headers)) {
+			if(!extra.hasOwnProperty(key)) extra[key] = headers[key]
+		}
+
 		return(fsa.writeFile(
 			Cache.getHeaderPath(cachePath),
-			JSON.stringify(headers),
+			JSON.stringify(extra),
 			{ encoding: 'utf8' }
 		));
 	}
@@ -224,7 +241,7 @@ export class Cache {
 	fetchRemote(address: Address, options: FetchOptions, resolveTask: () => void, rejectTask: (err?: NodeJS.ErrnoException) => void) {
 		var urlRemote = address.url!;
 
-		var redirectList: { address: Address, headers: Headers }[] = [];
+		var redirectList: { address: Address, status: number, headers: Headers }[] = [];
 		var found = false;
 		var resolve: (result: any) => void;
 		var reject: (err: any) => void;
@@ -255,6 +272,7 @@ export class Cache {
 			followRedirect: (res: http.IncomingMessage) => {
 				redirectList.push({
 					address: address,
+					status: res.statusCode!,
 					headers: res.headers
 				});
 
@@ -332,13 +350,21 @@ export class Cache {
 				streamRequest.pipe(streamBuffer, {end: true});
 				streamRequest.resume();
 
-				return(Promise.join(this.addLinks(redirectList, address), this.storeHeaders(cachePath, res.headers)).finally(() =>
-					resolve(new CacheResult(
-						streamBuffer as any as stream.Readable,
-						address,
-						res.headers
-					))
-				));
+				return(
+					Promise.join(
+						this.addLinks(redirectList, address),
+						this.storeHeaders(cachePath, res.headers, {
+							'cget-status': res.statusCode!
+						})
+					).finally(
+						() => resolve(new CacheResult(
+							streamBuffer as any as stream.Readable,
+							address,
+							res.statusCode!,
+							res.headers
+						))
+					)
+				);
 			}).catch(die);
 		});
 
@@ -354,6 +380,16 @@ export class Cache {
 		}
 
 		return(promise);
+	}
+
+	static removeInternalHeaders(headers: InternalHeaders) {
+		const output: Headers = {};
+
+		for(let key of Object.keys(headers)) {
+			if(key != 'cget-status' && key != 'cget-target') output[key] = headers[key] as string;
+		}
+
+		return(output);
 	}
 
 	static forceRedirect(urlRemote: string, options: FetchOptions) {

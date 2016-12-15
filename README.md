@@ -44,10 +44,11 @@ cache.fetch('http://www.google.com/').then(function(result) {
 });
 ```
 
-Running it the first time prints and saves the downloaded file and its headers:
+Running it the first time prints and saves the downloaded file and its headers including any redirects, for example:
 
-- `cache/www.google.com/index.html`
-- `cache/www.google.com/index.html.header.json`
+- `cache/www.google.com.header.json`
+- `cache/www.google.<COUNTRY>/<NONCE>`
+- `cache/www.google.<COUNTRY>/<NONCE>.header.json`
 
 The second time it prints the exact same output, but without needing a network connection.
 

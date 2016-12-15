@@ -24,23 +24,34 @@ Cached downloads
 ----------------
 
 ```JavaScript
-var path = require('path');
-var Cache = require('..').Cache;
+var Cache = require('cget').Cache;
+
+// Initialize the download cache.
 
 var cache = new Cache({
-  basePath: path.join(__dirname, 'cache'),
+
+  // Store files in "cache" subdirectory next to this script.
+  basePath: require('path').join(__dirname, 'cache'),
+
+  // Allow up to 2 parallel downloads.
   concurrency: 2
+
 });
 
+// Download a web page and print some info.
+
 cache.fetch('http://www.google.com/').then(function(result) {
+
   console.log('Remote address:   ' + result.address.url);
   console.log('Local cache path: ' + result.address.path);
+  console.log('HTTP status code: ' + result.status);
 
   console.log('Headers:');
   console.log(result.headers);
 
   console.log('Content:');
   result.stream.pipe(process.stdout);
+
 });
 ```
 

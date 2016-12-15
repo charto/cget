@@ -72,6 +72,9 @@ export class Cache {
 		}));
 	}
 
+	/** Try to synchronously guess the cache path for an address.
+	  * May be incorrect if it's a directory. */
+
 	getCachePathSync(address: Address) {
 		var cachePath = path.join(
 			this.basePath,
@@ -81,7 +84,7 @@ export class Cache {
 		return(cachePath);
 	}
 
-	// Get local cache file path where a remote URL should be downloaded.
+	/** Get local cache file path where a remote URL should be downloaded. */
 
 	getCachePath(address: Address) {
 		var cachePath = this.getCachePathSync(address);
@@ -99,9 +102,13 @@ export class Cache {
 		return(isDir(cachePath).then(makeValidPath));
 	}
 
+	/** Get path to headers for a locally cached file. */
+
 	static getHeaderPath(cachePath: string) {
 		return(cachePath + '.header.json');
 	}
+
+	/** Test if an address is cached. */
 
 	isCached(uri: string) {
 		return(this.getCachePath(new Address(uri)).then((cachePath: string) =>
@@ -111,7 +118,7 @@ export class Cache {
 		));
 	}
 
-	// Like getCachePath, but create the path if is doesn't exist.
+	/** Like getCachePath, but create its parent directory if nonexistent. */
 
 	createCachePath(address: Address) {
 		return(this.getCachePath(address).then((cachePath: string) =>
@@ -119,7 +126,7 @@ export class Cache {
 		));
 	}
 
-	// Check if there's a cached link redirecting the URL.
+	/** Check if there are cached headers that redirect the URL. */
 
 	static getRedirect(cachePath: string) {
 		return(
@@ -418,6 +425,7 @@ export class Cache {
 		return(url.format(urlParts));
 	}
 
+	/** Queue for limiting parallel downloads. */
 	fetchQueue: TaskQueue<Promise<any>>;
 
 	basePath: string;
@@ -426,7 +434,7 @@ export class Cache {
 	forceHost?: string;
 	forcePort?: number;
 
-	// Monkey-patch request to support forceHost when running tests.
+	/** Monkey-patch request to support forceHost when running tests. */
 
 	static patchRequest() {
 		var proto = require('request/lib/redirect.js').Redirect.prototype;

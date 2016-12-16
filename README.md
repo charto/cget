@@ -14,6 +14,7 @@ Features
 - Filesystem cache mirrors remote hosts and their directory structure.
   - Easy to bypass `cget` and look at cached files.
 - Headers are stored in separate `.header.json` files.
+- HTTP errors are cached to avoid repeating failing requests.
 - Concurrent downloads are automatically limited using [cwait](https://github.com/charto/cwait#readme).
 - Follows and caches redirect headers.
 - Built on top of [request](https://github.com/request/request).
@@ -33,12 +34,11 @@ Cached downloads
 ```JavaScript
 var Cache = require('cget').Cache;
 
+// Store files in "cache" subdirectory next to this script.
+var basePath = require('path').join(__dirname, 'cache');
+
 // Initialize the download cache.
-
-var cache = new Cache({
-
-  // Store files in "cache" subdirectory next to this script.
-  basePath: require('path').join(__dirname, 'cache'),
+var cache = new Cache(basePath, {
 
   // Allow up to 2 parallel downloads.
   concurrency: 2
@@ -51,7 +51,7 @@ cache.fetch('http://www.google.com/').then(function(result) {
 
   console.log('Remote address:   ' + result.address.url);
   console.log('Local cache path: ' + result.address.path);
-  console.log('HTTP status code: ' + result.status);
+  console.log('HTTP status code: ' + result.status + ' ' + result.message);
 
   console.log('Headers:');
   console.log(result.headers);

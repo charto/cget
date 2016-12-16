@@ -34,16 +34,29 @@ export type InternalHeaders = { [key: string]: number | string };
 export type Headers = { [key: string]: string };
 
 export class CacheResult {
-	constructor(streamOut: stream.Readable, address: Address, status: number, headers: Headers) {
+	constructor(streamOut: stream.Readable, address: Address, status: number, message: string, headers: Headers) {
 		this.stream = streamOut;
 		this.address = address;
-		this.headers = headers;
+
 		this.status = status;
+		this.message = message;
+
+		this.headers = headers;
 	}
 
 	stream: stream.Readable;
 	address: Address;
+
 	status: number;
+	message: string;
+
+	headers: Headers;
+}
+
+export class CacheError extends Error {
+	status: number;
+	message: string;
+
 	headers: Headers;
 }
 
@@ -64,11 +77,12 @@ export class Cache {
 
 	/** Store HTTP redirect headers with the final target address. */
 
-	addLinks(redirectList: { address: Address, status: number, headers: Headers }[], target: Address) {
-		return(Promise.map(redirectList, ({ address: address, status: status, headers: headers }) => {
+	addLinks(redirectList: { address: Address, status: number, message: string, headers: Headers }[], target: Address) {
+		return(Promise.map(redirectList, ({ address: address, status: status, message: message, headers: headers }) => {
 			this.createCachePath(address).then((cachePath: string) =>
 				this.storeHeaders(cachePath, headers, {
 					'cget-status': status,
+					'cget-message': message,
 					'cget-target': target.uri
 				})
 			)
@@ -129,24 +143,35 @@ export class Cache {
 		));
 	}
 
-	/** Check if there are cached headers that redirect the URL. */
+	/** Check if there are cached headers with errors or redirecting the URL. */
 
 	static getRedirect(cachePath: string) {
 		return(
 			fsa.readFile(
 				Cache.getHeaderPath(cachePath),
 				{ encoding: 'utf8' }
-			).then((data: string) => {
-				// Parse headers stored as JSON.
-				const headers = JSON.parse(data);
-				const status = headers['cget-status'];
+			).then(JSON.parse).catch(
+				(err: any) => ({})
+			).then((headers: InternalHeaders) => {
+				const status = headers['cget-status'] as number;
 
-				if(status >= 300 && status <= 308 && headers.location) {
-					return(headers['cget-target'] || headers.location);
+				if(!status) return(null);
+
+				if(status >= 300 && status <= 308 && headers['location']) {
+					return((headers['cget-target'] || headers['location']) as string);
+				}
+
+				if(status != 200 && (status < 500 || status >= 600)) {
+					var err = new CacheError(status + ' ' + headers['cget-message']);
+
+					err.headers = Cache.removeInternalHeaders(headers);
+					err.status = status;
+
+					throw(err);
 				}
 
 				return(null);
-			}).catch(() => null as any as {})
+			})
 		);
 	}
 
@@ -196,9 +221,9 @@ export class Cache {
 					address,
 					options!,
 					resolveTask
-				).catch((err: NodeJS.ErrnoException) => {
-					// Re-throw unexpected errors.
-					if(err.code != 'ENOENT') {
+				).catch((err: CacheError | NodeJS.ErrnoException) => {
+					// Re-throw HTTP and unexpected errors.
+					if(err instanceof CacheError || err.code != 'ENOENT') {
 						rejectTask(err);
 						throw(err);
 					}
@@ -226,7 +251,8 @@ export class Cache {
 			new Promise((resolve, reject) => {
 				// Resolve promise with headers if stream opens successfully.
 				streamIn.on('open', () => resolve({
-					'cget-status': 200
+					'cget-status': 200,
+					'cget-message': 'OK'
 				}));
 
 				// Cached file doesn't exist or IO error.
@@ -241,6 +267,7 @@ export class Cache {
 				streamIn,
 				address,
 				headers['cget-status'] as number,
+				headers['cget-message'] as string,
 				Cache.removeInternalHeaders(headers)
 			))
 		);
@@ -269,7 +296,10 @@ export class Cache {
 						(data: string) => JSON.parse(data)
 					).catch(
 						/** If headers are not found, invent some. */
-						(err: NodeJS.ErrnoException) => ({ 'cget-status': 200 })
+						(err: NodeJS.ErrnoException) => ({
+							'cget-status': 200,
+							'cget-message': 'OK'
+						})
 					)
 				));
 
@@ -281,6 +311,7 @@ export class Cache {
 				streamIn,
 				address,
 				headers['cget-status'] as number,
+				headers['cget-message'] as string,
 				Cache.removeInternalHeaders(headers)
 			))
 		);
@@ -301,7 +332,7 @@ export class Cache {
 	fetchRemote(address: Address, options: FetchOptions, resolveTask: () => void, rejectTask: (err?: NodeJS.ErrnoException) => void) {
 		var urlRemote = address.url!;
 
-		var redirectList: { address: Address, status: number, headers: Headers }[] = [];
+		var redirectList: { address: Address, status: number, message: string, headers: Headers }[] = [];
 		var found = false;
 		var resolve: (result: any) => void;
 		var reject: (err: any) => void;
@@ -333,6 +364,7 @@ export class Cache {
 				redirectList.push({
 					address: address,
 					status: res.statusCode!,
+					message: res.statusMessage!,
 					headers: res.headers
 				});
 
@@ -379,15 +411,25 @@ export class Cache {
 			if(found) return;
 			found = true;
 
-			const code = res.statusCode;
+			const status = res.statusCode!;
 
-			if(code != 200) {
-				if(code < 500 || code >= 600) {
-					var err = new Error(code + ' ' + res.statusMessage);
+			if(status != 200) {
+				if(status < 500 || status >= 600) {
+					var err = new CacheError(status + ' ' + res.statusMessage);
 
-					// TODO: Cache the HTTP error.
+					this.createCachePath(address).then((cachePath: string) =>
+						this.storeHeaders(cachePath, res.headers, {
+							'cget-status': status,
+							'cget-message': res.statusMessage!
+						})
+					);
 
-					die(err);
+					err.headers = res.headers;
+					err.status = status;
+
+					reject(err);
+					rejectTask(err);
+					return;
 				}
 
 				console.error('SHOULD RETRY');
@@ -414,13 +456,15 @@ export class Cache {
 					Promise.join(
 						this.addLinks(redirectList, address),
 						this.storeHeaders(cachePath, res.headers, {
-							'cget-status': res.statusCode!
+							'cget-status': res.statusCode!,
+							'cget-message': res.statusMessage!
 						})
 					).finally(
 						() => resolve(new CacheResult(
 							streamBuffer as any as stream.Readable,
 							address,
 							res.statusCode!,
+							res.statusMessage!,
 							res.headers
 						))
 					)
@@ -442,11 +486,17 @@ export class Cache {
 		return(promise);
 	}
 
+	static internalHeaderTbl = {
+		'cget-status': true,
+		'cget-message': true,
+		'cget-target': true
+	};
+
 	static removeInternalHeaders(headers: InternalHeaders) {
 		const output: Headers = {};
 
 		for(let key of Object.keys(headers)) {
-			if(key != 'cget-status' && key != 'cget-target') output[key] = headers[key] as string;
+			if(!Cache.internalHeaderTbl[key]) output[key] = headers[key] as string;
 		}
 
 		return(output);

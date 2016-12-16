@@ -19,8 +19,10 @@ import {Address} from './Address';
 // TODO: handle redirect loops.
 
 export interface FetchOptions {
+	allowLocal?: boolean;
 	forceHost?: string;
 	forcePort?: number;
+	cwd?: string;
 }
 
 export interface CacheOptions extends FetchOptions {
@@ -54,8 +56,10 @@ export class Cache {
 		this.indexName = options.indexName || 'index.html';
 		this.fetchQueue = new TaskQueue(Promise, options.concurrency || 2);
 
+		this.allowLocal = options.allowLocal || false;
 		this.forceHost = options.forceHost;
 		this.forcePort = options.forcePort;
+		this.cwd = options.cwd || '.';
 	}
 
 	/** Store HTTP redirect headers with the final target address. */
@@ -165,8 +169,26 @@ export class Cache {
 	 * and a readable stream of its contents. */
 
 	fetch(uri: string, options?: FetchOptions) {
-		const address = new Address(uri);
 		if(!options) options = {};
+
+		const address = new Address(uri, this.cwd || options.cwd);
+
+		if(address.isLocal) {
+			if(!(options.allowLocal || (options.allowLocal !== false && this.allowLocal))) {
+				return(Promise.reject(new Error('Access denied to url ' + address.url)));
+			}
+
+			return(new Promise((resolve, reject) =>
+				this.fetchQueue.add(() => new Promise((resolveTask, rejectTask) =>
+					this.fetchLocal(
+						address,
+						options!,
+						resolveTask,
+						rejectTask
+					).then(resolve, reject)
+				))
+			));
+		}
 
 		return(new Promise((resolve, reject) =>
 			this.fetchQueue.add(() => new Promise((resolveTask, rejectTask) =>
@@ -181,7 +203,7 @@ export class Cache {
 						throw(err);
 					}
 
-					if(address.url) {
+					if(address.url && !address.isLocal) {
 						return(this.fetchRemote(address, options!, resolveTask, rejectTask));
 					} else {
 						rejectTask(err);
@@ -190,6 +212,38 @@ export class Cache {
 				}).then(resolve, reject)
 			))
 		));
+	}
+
+	fetchLocal(
+		address: Address,
+		options: FetchOptions,
+		resolveTask: () => void,
+		rejectTask: (err?: NodeJS.ErrnoException) => void
+	) {
+		var streamIn = fs.createReadStream(address.path);
+
+		return(
+			new Promise((resolve, reject) => {
+				// Resolve promise with headers if stream opens successfully.
+				streamIn.on('open', () => resolve({
+					'cget-status': 200
+				}));
+
+				// Cached file doesn't exist or IO error.
+				streamIn.on('error', (err: NodeJS.ErrnoException) => {
+					reject(err);
+					rejectTask(err);
+					throw(err);
+				});
+
+				streamIn.on('end', resolveTask);
+			}).then((headers: InternalHeaders) => new CacheResult(
+				streamIn,
+				address,
+				headers['cget-status'] as number,
+				Cache.removeInternalHeaders(headers)
+			))
+		);
 	}
 
 	fetchCached(address: Address, options: FetchOptions, resolveTask: () => void) {
@@ -430,8 +484,10 @@ export class Cache {
 	basePath: string;
 	indexName: string;
 
+	allowLocal: boolean;
 	forceHost?: string;
 	forcePort?: number;
+	cwd: string;
 
 	/** Monkey-patch request to support forceHost when running tests. */
 

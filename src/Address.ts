@@ -1,6 +1,7 @@
 // This file is part of cget, copyright (c) 2015-2016 BusFaster Ltd.
 // Released under the MIT license, see LICENSE.
 
+import * as path from 'path';
 import * as url from 'url';
 
 export function sanitizeUrl(urlRemote: string) {
@@ -34,28 +35,38 @@ export function sanitizePath(path: string) {
 }
 
 export class Address {
-	constructor(uri: string) {
+	constructor(uri: string, cwd?: string) {
 		var urn: string | null = null;
 		var url: string | null = null;
-		var path: string;
+		var cachePath: string;
 
-		if(uri.substr(0,4) == 'urn:') {
+		if(uri.match(/^\.?\.?\//)) {
+			// The URI looks more like a local path.
+			cachePath = path.resolve(cwd || '.', uri);
+			url = 'file://' + cachePath;
+			this.isLocal = true;
+		} else if(uri.substr(0, 5) == 'file:') {
+			cachePath = path.resolve(uri.substr(5));
+			url = 'file://' + cachePath;
+			this.isLocal = true;
+		} else if(uri.substr(0, 4) == 'urn:') {
 			urn = uri;
-			path = urn.substr(4).replace(/:/g, '/');
+			cachePath = urn.substr(4).replace(/:/g, '/');
 		} else {
 			// If the URI is not a URN address, interpret it as a URL address and clean it up.
 			url = sanitizeUrl(uri);
-			path = uri.substr(uri.indexOf(':') + 1);
+			cachePath = uri.substr(uri.indexOf(':') + 1);
 		}
 
 		this.uri = (urn || url)!;
 		this.urn = urn;
 		this.url = url;
-		this.path = sanitizePath(path);
+		this.path = this.isLocal ? cachePath : sanitizePath(cachePath);
 	}
 
 	uri: string;
 	urn: string | null;
 	url: string | null;
 	path: string;
+	isLocal = false;
 }

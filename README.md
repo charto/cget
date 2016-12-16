@@ -11,13 +11,18 @@ Features
 --------
 
 - Promise-based API, returns HTTP headers and a Node.js stream with contents.
-- Filesystem cache mirrors remote host and directory structure.
+- Filesystem cache mirrors remote hosts and their directory structure.
   - Easy to bypass `cget` and look at cached files.
 - Headers are stored in separate `.header.json` files.
 - Concurrent downloads are automatically limited using [cwait](https://github.com/charto/cwait#readme).
-- Also supports and caches redirect headers.
+- Follows and caches redirect headers.
 - Built on top of [request](https://github.com/request/request).
+- Streaming from `file://` URLs can be enabled, bypassing the cache.
+- Files can be stored in the cache with any URI (URL or URN) as the key.
 - Written in TypeScript.
+
+`cget` is perfect for downloading and caching various schema files,
+and is used in [cxsd](https://github.com/charto/cxsd#readme)
 
 Usage
 =====
@@ -57,7 +62,8 @@ cache.fetch('http://www.google.com/').then(function(result) {
 });
 ```
 
-Running it the first time prints and saves the downloaded file and its headers including any redirects, for example:
+Running it the first time prints and saves the downloaded file and its headers including any redirects
+in local files, for example:
 
 - `cache/www.google.com.header.json`
 - `cache/www.google.<COUNTRY>/<NONCE>`

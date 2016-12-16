@@ -250,10 +250,7 @@ export class Cache {
 		return(
 			new Promise((resolve, reject) => {
 				// Resolve promise with headers if stream opens successfully.
-				streamIn.on('open', () => resolve({
-					'cget-status': 200,
-					'cget-message': 'OK'
-				}));
+				streamIn.on('open', () => resolve(Cache.defaultHeaders));
 
 				// Cached file doesn't exist or IO error.
 				streamIn.on('error', (err: NodeJS.ErrnoException) => {
@@ -296,10 +293,7 @@ export class Cache {
 						(data: string) => JSON.parse(data)
 					).catch(
 						/** If headers are not found, invent some. */
-						(err: NodeJS.ErrnoException) => ({
-							'cget-status': 200,
-							'cget-message': 'OK'
-						})
+						(err: NodeJS.ErrnoException) => Cache.defaultHeaders
 					)
 				));
 
@@ -485,6 +479,11 @@ export class Cache {
 
 		return(promise);
 	}
+
+	static defaultHeaders = {
+		'cget-status': 200,
+		'cget-message': 'OK'
+	};
 
 	static internalHeaderTbl = {
 		'cget-status': true,

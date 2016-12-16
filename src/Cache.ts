@@ -30,7 +30,7 @@ export interface CacheOptions extends FetchOptions {
 	concurrency?: number;
 }
 
-export type InternalHeaders = { [key: string]: number | string };
+type InternalHeaders = { [key: string]: number | string };
 export type Headers = { [key: string]: string };
 
 export class CacheResult {
@@ -77,7 +77,7 @@ export class Cache {
 
 	/** Store HTTP redirect headers with the final target address. */
 
-	addLinks(redirectList: { address: Address, status: number, message: string, headers: Headers }[], target: Address) {
+	private addLinks(redirectList: { address: Address, status: number, message: string, headers: Headers }[], target: Address) {
 		return(Promise.map(redirectList, ({ address: address, status: status, message: message, headers: headers }) => {
 			this.createCachePath(address).then((cachePath: string) =>
 				this.storeHeaders(cachePath, headers, {
@@ -137,7 +137,7 @@ export class Cache {
 
 	/** Like getCachePath, but create its parent directory if nonexistent. */
 
-	createCachePath(address: Address) {
+	private createCachePath(address: Address) {
 		return(this.getCachePath(address).then((cachePath: string) =>
 			mkdirp(path.dirname(cachePath), this.indexName).then(() => cachePath)
 		));
@@ -145,7 +145,7 @@ export class Cache {
 
 	/** Check if there are cached headers with errors or redirecting the URL. */
 
-	static getRedirect(cachePath: string) {
+	private static getRedirect(cachePath: string) {
 		return(
 			fsa.readFile(
 				Cache.getHeaderPath(cachePath),
@@ -239,7 +239,7 @@ export class Cache {
 		));
 	}
 
-	fetchLocal(
+	private fetchLocal(
 		address: Address,
 		options: FetchOptions,
 		resolveTask: () => void,
@@ -270,7 +270,7 @@ export class Cache {
 		);
 	}
 
-	fetchCached(address: Address, options: FetchOptions, resolveTask: () => void) {
+	private fetchCached(address: Address, options: FetchOptions, resolveTask: () => void) {
 		var streamIn: fs.ReadStream;
 
 		// Any errors shouldn't be handled here, but instead in the caller.
@@ -323,7 +323,7 @@ export class Cache {
 		));
 	}
 
-	fetchRemote(address: Address, options: FetchOptions, resolveTask: () => void, rejectTask: (err?: NodeJS.ErrnoException) => void) {
+	private fetchRemote(address: Address, options: FetchOptions, resolveTask: () => void, rejectTask: (err?: NodeJS.ErrnoException) => void) {
 		var urlRemote = address.url!;
 
 		var redirectList: { address: Address, status: number, message: string, headers: Headers }[] = [];
@@ -480,18 +480,18 @@ export class Cache {
 		return(promise);
 	}
 
-	static defaultHeaders = {
+	private static defaultHeaders = {
 		'cget-status': 200,
 		'cget-message': 'OK'
 	};
 
-	static internalHeaderTbl = {
+	private static internalHeaderTbl = {
 		'cget-status': true,
 		'cget-message': true,
 		'cget-target': true
 	};
 
-	static removeInternalHeaders(headers: InternalHeaders) {
+	private static removeInternalHeaders(headers: InternalHeaders) {
 		const output: Headers = {};
 
 		for(let key of Object.keys(headers)) {
@@ -501,7 +501,7 @@ export class Cache {
 		return(output);
 	}
 
-	static forceRedirect(urlRemote: string, options: FetchOptions) {
+	private static forceRedirect(urlRemote: string, options: FetchOptions) {
 		if(!options.forceHost && !options.forcePort) return(urlRemote);
 
 		var urlParts = url.parse(urlRemote);
@@ -528,19 +528,19 @@ export class Cache {
 	}
 
 	/** Queue for limiting parallel downloads. */
-	fetchQueue: TaskQueue<Promise<any>>;
+	private fetchQueue: TaskQueue<Promise<any>>;
 
-	basePath: string;
-	indexName: string;
+	private basePath: string;
+	private indexName: string;
 
-	allowLocal: boolean;
-	forceHost?: string;
-	forcePort?: number;
-	cwd: string;
+	private allowLocal: boolean;
+	private forceHost?: string;
+	private forcePort?: number;
+	private cwd: string;
 
 	/** Monkey-patch request to support forceHost when running tests. */
 
-	static patchRequest() {
+	private static patchRequest() {
 		var proto = require('request/lib/redirect.js').Redirect.prototype;
 
 		var func = proto.redirectTo;

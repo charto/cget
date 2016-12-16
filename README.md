@@ -3,7 +3,7 @@ cget
 
 [![npm version](https://img.shields.io/npm/v/cget.svg)](https://www.npmjs.com/package/cget)
 
-`cget` is a robust streaming parallel download manager with a filesystem cache.
+`cget` is a robust streaming parallel download manager with a filesystem cache and a simple API.
 
 These docs are relevant to the new version under construction on Github, not yet published on NPM.
 
@@ -13,13 +13,13 @@ Features
 - Promise-based API, returns HTTP headers and a Node.js stream with contents.
 - Filesystem cache mirrors remote hosts and their directory structure.
   - Easy to bypass `cget` and look at cached files.
-- Headers are stored in separate `.header.json` files.
-- HTTP errors are cached to avoid repeating failing requests.
-- Concurrent downloads are automatically limited using [cwait](https://github.com/charto/cwait#readme).
+- Stores headers in separate `.header.json` files.
+- Caches HTTP errors to avoid repeating failing requests.
+- Limits concurrent downloads automatically using [cwait](https://github.com/charto/cwait#readme).
 - Follows and caches redirect headers.
 - Built on top of [request](https://github.com/request/request).
-- Streaming from `file://` URLs can be enabled, bypassing the cache.
-- Files can be stored in the cache with any URI (URL or URN) as the key.
+- Optionally allow streaming from `file://` URLs, bypassing the cache.
+- Add arbitrary files in the cache with any URI (URL or URN) as the key.
 - Written in TypeScript.
 
 `cget` is perfect for downloading and caching various schema files,

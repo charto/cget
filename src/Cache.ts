@@ -33,6 +33,13 @@ export interface CacheOptions extends FetchOptions {
 type InternalHeaders = { [key: string]: number | string };
 export type Headers = { [key: string]: string };
 
+interface RedirectSpec {
+	address: Address;
+	status: number;
+	message: string;
+	headers: Headers;
+}
+
 export class CacheResult {
 	constructor(streamOut: stream.Readable, address: Address, status: number, message: string, headers: Headers) {
 		this.stream = streamOut;
@@ -77,16 +84,21 @@ export class Cache {
 
 	/** Store HTTP redirect headers with the final target address. */
 
-	private addLinks(redirectList: { address: Address, status: number, message: string, headers: Headers }[], target: Address) {
-		return(Promise.map(redirectList, ({ address: address, status: status, message: message, headers: headers }) => {
-			this.createCachePath(address).then((cachePath: string) =>
+	private addLinks(redirectList: RedirectSpec[], target: Address) {
+		return(Promise.map(redirectList,
+			({
+				address: address,
+				status: status,
+				message: message,
+				headers: headers
+			}) => this.createCachePath(address).then((cachePath: string) =>
 				this.storeHeaders(cachePath, headers, {
 					'cget-status': status,
 					'cget-message': message,
 					'cget-target': target.uri
 				})
 			)
-		}));
+		));
 	}
 
 	/** Try to synchronously guess the cache path for an address.
@@ -323,10 +335,15 @@ export class Cache {
 		));
 	}
 
-	private fetchRemote(address: Address, options: FetchOptions, resolveTask: () => void, rejectTask: (err?: NodeJS.ErrnoException) => void) {
+	private fetchRemote(
+		address: Address,
+		options: FetchOptions,
+		resolveTask: () => void,
+		rejectTask: (err?: NodeJS.ErrnoException) => void
+	) {
 		var urlRemote = address.url!;
 
-		var redirectList: { address: Address, status: number, message: string, headers: Headers }[] = [];
+		var redirectList: RedirectSpec[] = [];
 		var found = false;
 		var resolve: (result: any) => void;
 		var reject: (err: any) => void;
@@ -426,6 +443,7 @@ export class Cache {
 					return;
 				}
 
+				// TODO
 				console.error('SHOULD RETRY');
 
 				throw(new Error('RETRY'));

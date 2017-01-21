@@ -503,7 +503,7 @@ export class Cache {
 		'cget-message': 'OK'
 	};
 
-	private static internalHeaderTbl = {
+	private static internalHeaderTbl: { [key: string]: boolean } = {
 		'cget-status': true,
 		'cget-message': true,
 		'cget-target': true
@@ -558,7 +558,7 @@ export class Cache {
 
 	/** Monkey-patch request to support forceHost when running tests. */
 
-	private static patchRequest() {
+	static patchRequest() {
 		var proto = require('request/lib/redirect.js').Redirect.prototype;
 
 		var func = proto.redirectTo;

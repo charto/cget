@@ -23,6 +23,9 @@ export interface FetchOptions {
 	allowRemote?: boolean;
 	forceHost?: string;
 	forcePort?: number;
+	username?: string;
+	password?: string;
+	timeout?: number;
 	cwd?: string;
 }
 
@@ -366,9 +369,9 @@ export class Cache {
 			streamBuffer.emit('error', err);
 		}
 
-		var streamRequest = request.get({
-			url: Cache.forceRedirect(urlRemote, options),
+		const requestConfig: request.CoreOptions = {
 			encoding: null,
+			gzip: true,
 			followRedirect: (res: http.IncomingMessage) => {
 				redirectList.push({
 					address: address,
@@ -400,7 +403,22 @@ export class Cache {
 
 				return(true);
 			}
-		});
+		};
+
+		if(options.timeout) requestConfig.timeout = options.timeout;
+
+		if(options.username && options.password) {
+			requestConfig.auth = {
+				user: options.username,
+				pass: options.password,
+				sendImmediately: true
+			};
+		}
+
+		var streamRequest = request.get(
+			Cache.forceRedirect(urlRemote, options),
+			requestConfig
+		);
 
 		streamRequest.on('error', (err: NodeJS.ErrnoException) => {
 			// Check if retrying makes sense for this error.

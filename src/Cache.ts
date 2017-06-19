@@ -353,23 +353,18 @@ export class Cache {
 		var promise = new Promise<CacheResult>((res, rej) => {
 			resolve = res;
 			reject = rej;
-		})
+		});
+
+		var streamBuffer = new stream.PassThrough();
 
 		function die(err: NodeJS.ErrnoException) {
 			// Abort and report.
 			if(streamRequest) streamRequest.abort();
 
-			console.error('Got error:');
-			console.error(err);
-			console.error('Downloading URL:');
-			console.error(urlRemote);
-
 			reject(err);
 			rejectTask(err);
-			throw(err);
+			streamBuffer.emit('error', err);
 		}
-
-		var streamBuffer = new stream.PassThrough();
 
 		var streamRequest = request.get({
 			url: Cache.forceRedirect(urlRemote, options),
@@ -418,7 +413,7 @@ export class Cache {
 
 			console.error('SHOULD RETRY');
 
-			throw(err);
+			die(err);
 		});
 
 		streamRequest.on('response', (res: http.IncomingMessage) => {
@@ -449,7 +444,7 @@ export class Cache {
 				// TODO
 				console.error('SHOULD RETRY');
 
-				throw(new Error('RETRY'));
+				die(new Error('RETRY'));
 			}
 
 			streamRequest.pause();

@@ -20,6 +20,7 @@ import { Address } from './Address';
 
 export interface FetchOptions {
 	allowLocal?: boolean;
+	allowRemote?: boolean;
 	forceHost?: string;
 	forcePort?: number;
 	cwd?: string;
@@ -70,11 +71,12 @@ export class Cache {
 	constructor(basePath: string, options?: CacheOptions) {
 		if(!options) options = {};
 
-		this.basePath = path.resolve(basePath || 'cache');
+		this.basePath = path.resolve('.', basePath || 'cache');
 		this.indexName = options.indexName || 'index.html';
 		this.fetchQueue = new TaskQueue(Promise, options.concurrency || 2);
 
 		this.allowLocal = options.allowLocal || false;
+		this.allowRemote = options.allowRemote || false;
 		this.forceHost = options.forceHost;
 		this.forcePort = options.forcePort;
 		this.cwd = options.cwd || '.';
@@ -239,6 +241,9 @@ export class Cache {
 					}
 
 					if(address.url && !address.isLocal) {
+						if(!(options!.allowRemote || (options!.allowRemote !== false && this.allowRemote))) {
+							return(Promise.reject(new Error('Access denied to url ' + address.url)));
+						}
 						return(this.fetchRemote(address, options!, resolveTask, rejectTask));
 					} else {
 						rejectTask(err);
@@ -550,6 +555,7 @@ export class Cache {
 	private indexName: string;
 
 	private allowLocal: boolean;
+	private allowRemote: boolean;
 	private forceHost?: string;
 	private forcePort?: number;
 	private cwd: string;

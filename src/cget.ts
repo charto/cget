@@ -1,2 +1,2 @@
-export {Address} from './Address';
-export {FetchOptions, Cache, CacheResult} from './Cache';
+export { Address } from './Address';
+export { FetchOptions, Cache, CacheResult } from './Cache';

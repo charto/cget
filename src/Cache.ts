@@ -10,10 +10,10 @@ import * as stream from 'stream';
 import * as request from 'request';
 import * as Promise from 'bluebird';
 
-import {TaskQueue} from 'cwait';
+import { TaskQueue } from 'cwait';
 
-import {fsa, mkdirp, isDir} from './mkdirp';
-import {Address} from './Address';
+import { fsa, mkdirp, isDir } from './mkdirp';
+import { Address } from './Address';
 
 // TODO: continue interrupted downloads.
 // TODO: handle redirect loops.

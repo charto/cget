@@ -1,4 +1,4 @@
-// This file is part of cget, copyright (c) 2015-2016 BusFaster Ltd.
+// This file is part of cget, copyright (c) 2015-2017 BusFaster Ltd.
 // Released under the MIT license, see LICENSE.
 
 import * as fs from 'fs';

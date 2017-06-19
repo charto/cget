@@ -30,8 +30,8 @@ export interface CacheOptions extends FetchOptions {
 	concurrency?: number;
 }
 
-type InternalHeaders = { [key: string]: number | string };
-export type Headers = { [key: string]: string };
+type InternalHeaders = { [key: string]: number | string | string[] };
+export type Headers = { [key: string]: string | string[] };
 
 interface RedirectSpec {
 	address: Address;
@@ -62,8 +62,6 @@ export class CacheResult {
 
 export class CacheError extends Error {
 	status: number;
-	message: string;
-
 	headers: Headers;
 }
 
@@ -379,7 +377,7 @@ export class Cache {
 					headers: res.headers
 				});
 
-				urlRemote = url.resolve(urlRemote, res.headers.location);
+				urlRemote = url.resolve(urlRemote, res.headers.location as string);
 				address = new Address(urlRemote);
 
 				this.fetchCached(address, options, resolveTask).then((result: CacheResult) => {

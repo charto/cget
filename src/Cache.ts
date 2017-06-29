@@ -79,7 +79,8 @@ export class Cache {
 		this.fetchQueue = new TaskQueue(Promise, options.concurrency || 2);
 
 		this.allowLocal = options.allowLocal || false;
-		this.allowRemote = options.allowRemote || false;
+		this.allowRemote = options.allowRemote || !('allowRemote' in options);
+
 		this.forceHost = options.forceHost;
 		this.forcePort = options.forcePort;
 		this.cwd = options.cwd || '.';

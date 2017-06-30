@@ -4,21 +4,6 @@
 import * as path from 'path';
 import * as url from 'url';
 
-export function sanitizeUrl(urlRemote: string) {
-	var urlParts = url.parse(urlRemote, false, true);
-	var origin = urlParts.host || '';
-
-	if((urlParts.pathname || '').charAt(0) != '/') origin += '/';
-
-	origin += urlParts.pathname;
-	return([
-		urlParts.protocol || 'http:',
-		'//',
-		url.resolve('', origin),
-		urlParts.search || ''
-	].join(''));
-}
-
 /** Last line of defence to filter malicious paths. */
 
 export function sanitizePath(path: string) {
@@ -36,32 +21,39 @@ export function sanitizePath(path: string) {
 
 export class Address {
 	constructor(uri: string, cwd?: string) {
-		var urn: string | null = null;
-		var url: string | null = null;
-		var cachePath: string;
-
 		if(uri.match(/^\.?\.?\//)) {
 			// The URI looks more like a local path.
-			cachePath = path.resolve(cwd || '.', uri);
-			url = 'file://' + cachePath;
+			this.path = path.resolve(cwd || '.', uri);
+			this.url = 'file://' + this.path;
 			this.isLocal = true;
 		} else if(uri.substr(0, 5) == 'file:') {
-			cachePath = path.resolve(uri.substr(5));
-			url = 'file://' + cachePath;
+			this.path = path.resolve(uri.substr(5));
+			this.url = 'file://' + this.path;
 			this.isLocal = true;
 		} else if(uri.substr(0, 4) == 'urn:') {
-			urn = uri;
-			cachePath = urn.substr(4).replace(/:/g, '/');
+			this.urn = uri;
+			this.path = sanitizePath(this.urn.substr(4).replace(/:/g, '/'));
 		} else {
 			// If the URI is not a URN address, interpret it as a URL address and clean it up.
-			url = sanitizeUrl(uri);
-			cachePath = uri.substr(uri.indexOf(':') + 1);
+
+			const parts = url.parse(uri, false, true);
+			const origin = parts.host || '';
+
+			const slash = ((parts.pathname || '').charAt(0) == '/') ? '' : '/';
+
+			this.url = (
+				(parts.protocol || 'http:') + '//' +
+				url.resolve('', origin + slash + parts.pathname) +
+				(parts.search || '')
+			);
+
+			this.path = sanitizePath(
+				url.resolve('', origin.replace(/:.*/, '') + slash + parts.pathname) +
+				(parts.search || '')
+			);
 		}
 
-		this.uri = (urn || url)!;
-		this.urn = urn;
-		this.url = url;
-		this.path = this.isLocal ? cachePath : sanitizePath(cachePath);
+		this.uri = (this.urn || this.url)!;
 	}
 
 	uri: string;

@@ -2,7 +2,7 @@
 	"compileOnSave": true,
 	"compilerOptions": {
 		"declaration": true,
-		"lib": ["dom", "es5", "es2015.collection"],
+		"lib": ["es5", "es2015.collection"],
 		"module": "commonjs",
 		"moduleResolution": "node",
 		"noImplicitAny": true,
@@ -14,6 +14,6 @@
 		"target": "es5"
 	},
 	"files": [
-		"cget.ts"
+		"index.ts"
 	]
 }

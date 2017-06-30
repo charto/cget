@@ -2,8 +2,8 @@
   "name": "cget",
   "version": "0.1.0",
   "description": "Robust streaming parallel download manager with filesystem cache",
-  "main": "dist/cget.js",
-  "typings": "dist/cget.d.ts",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
   "scripts": {
     "tsc": "tsc",
     "prepublish": "tsc -p src",

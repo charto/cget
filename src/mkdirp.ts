@@ -14,7 +14,6 @@ export const fsa = {
 	open: Promise.promisify(fs.open),
 	rename: Promise.promisify(fs.rename) as any as (src: string, dst: string) => Promise<{}>,
 	mkdir: Promise.promisify(fs.mkdir) as (name: string) => Promise<{}>,
-	read: Promise.promisify(fs.read),
 	readFile: Promise.promisify(fs.readFile) as any as (name: string, options: {encoding: string; flag?: string;}) => Promise<string>,
 	writeFile: Promise.promisify(fs.writeFile) as (name: string, content: string, options: {encoding: string; flag?: string;}) => Promise<{}>
 };
@@ -48,25 +47,26 @@ export function mkdirp(pathName: string, indexName: string) {
 
 		pathPrefix = prefixList.join(path.sep);
 
-		return(Promise.try(() => fsa.stat(pathPrefix)).then((stats: fs.Stats) => {
+		return(fsa.stat(pathPrefix).then((stats: fs.Stats): {} | undefined => {
 			if(stats.isFile()) {
 				// Trying to convert a file into a directory.
 				// Rename the file to indexName and move it into the new directory.
 
 				var tempPath = pathPrefix + '.' + makeTempSuffix(6);
 
-				return(Promise.try(() =>
-					fsa.rename(pathPrefix, tempPath)
-				).then(() =>
-					fsa.mkdir(pathPrefix)
-				).then(() =>
-					fsa.rename(tempPath, path.join(pathPrefix, indexName))
-				));
+				return(
+					fsa.rename(
+						pathPrefix,
+						tempPath
+					).then(() =>
+						fsa.mkdir(pathPrefix)
+					).then(() =>
+						fsa.rename(tempPath, path.join(pathPrefix, indexName))
+					)
+				);
 			} else if(!stats.isDirectory()) {
 				throw(new Error('Tried to create a directory inside something weird: ' + pathPrefix));
 			}
-
-			return(null as any as {});
 		}).catch((err: NodeJS.ErrnoException) => {
 			// Re-throw unexpected errors.
 			if(err.code != 'ENOENT' && err.code != 'ENOTDIR') throw(err);

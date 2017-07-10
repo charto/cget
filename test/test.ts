@@ -1,8 +1,9 @@
 import * as path from 'path';
 import * as stream from 'stream';
+import * as Promise from 'bluebird';
 import * as cget from '..';
 
-import { startServer } from './ds9k';
+import { Server } from './ds9k';
 
 const content = '<html></html>\n';
 
@@ -126,78 +127,98 @@ function runTests(port: number, concurrency: number) {
 		cwd
 	});
 
+	const testList: Promise<any>[] = [];
+
 	for(let num = 0; num < validLocal.length; ++num) {
 		const name = 'Valid local fetch ' + num;
 
-		localLive.fetch(
-			validLocal[num]
-		).then((result: cget.CacheResult) =>
-			expectedResult(name, result, 200)
-		).catch((err: Error) => unexpectedError(name, err));
+		testList.push(
+			localLive.fetch(
+				validLocal[num]
+			).then((result: cget.CacheResult) =>
+				expectedResult(name, result, 200)
+			).catch((err: Error) => unexpectedError(name, err))
+		);
 	}
 
 	for(let num = 0; num < validLocal.length; ++num) {
 		const name = 'Forbidden local fetch ' + num;
 
-		remoteCache.fetch(
-			validLocal[num]
-		).then((result: cget.CacheResult) =>
-			unexpectedResult(name, result)
-		).catch((err: Error) => expectedError(name, err, 403));
+		testList.push(
+			remoteCache.fetch(
+				validLocal[num]
+			).then((result: cget.CacheResult) =>
+				unexpectedResult(name, result)
+			).catch((err: Error) => expectedError(name, err, 403))
+		);
 	}
 
 	for(let num = 0; num < invalidLocal.length; ++num) {
 		const name = 'Invalid local fetch ' + num;
 
-		localLive.fetch(
-			invalidLocal[num]
-		).then((result: cget.CacheResult) =>
-			unexpectedResult(name, result)
-		).catch((err: Error) => expectedError(name, err, 'ENOENT'));
+		testList.push(
+			localLive.fetch(
+				invalidLocal[num]
+			).then((result: cget.CacheResult) =>
+				unexpectedResult(name, result)
+			).catch((err: Error) => expectedError(name, err, 'ENOENT'))
+		);
 	}
 
 	for(let num = 0; num < validCached.length; ++num) {
 		const name = 'Valid cached fetch ' + num;
 
-		remoteCache.fetch(
-			validCached[num]
-		).then((result: cget.CacheResult) =>
-			expectedResult(name, result, 200)
-		).catch((err: Error) => unexpectedError(name, err));
+		testList.push(
+			remoteCache.fetch(
+				validCached[num]
+			).then((result: cget.CacheResult) =>
+				expectedResult(name, result, 200)
+			).catch((err: Error) => unexpectedError(name, err))
+		);
 	}
 
 	for(let num = 0; num < invalidCached.length; num += 2) {
 		const name = 'Invalid cached fetch ' + (num / 2);
 
-		remoteCache.fetch(
-			invalidCached[num + 1] as string
-		).then((result: cget.CacheResult) =>
-			unexpectedResult(name, result)
-		).catch((err: Error) => expectedError(name, err, invalidCached[num]));
+		testList.push(
+			remoteCache.fetch(
+				invalidCached[num + 1] as string
+			).then((result: cget.CacheResult) =>
+				unexpectedResult(name, result)
+			).catch((err: Error) => expectedError(name, err, invalidCached[num]))
+		);
 	}
 
 	for(let num = 0; num < validCached.length; ++num) {
 		const name = 'Forbidden cached fetch ' + num;
 
-		localLive.fetch(
-			validCached[num]
-		).then((result: cget.CacheResult) =>
-			unexpectedResult(name, result)
-		).catch((err: Error) => expectedError(name, err, 403));
+		testList.push(
+			localLive.fetch(
+				validCached[num]
+			).then((result: cget.CacheResult) =>
+				unexpectedResult(name, result)
+			).catch((err: Error) => expectedError(name, err, 403))
+		);
 	}
 
 	for(let num = 0; num < validCached.length; ++num) {
 		const name = 'Valid remote fetch ' + num;
 
-		remoteLive.fetch(
-			validCached[num]
-		).then((result: cget.CacheResult) =>
-			expectedResult(name, result, 200)
-		).catch((err: Error) => unexpectedError(name, err));
+		testList.push(
+			remoteLive.fetch(
+				validCached[num]
+			).then((result: cget.CacheResult) =>
+				expectedResult(name, result, 200)
+			).catch((err: Error) => unexpectedError(name, err))
+		);
 	}
+
+	return(Promise.all(testList));
 }
 
-startServer(8080).then(() => {
-	runTests(8080, Infinity);
-	runTests(8080, 1);
-});
+const server = new Server(8080);
+
+server.ready.then(() => Promise.all([
+	runTests(8080, Infinity),
+	runTests(8080, 1)
+])).then(() => server.close());

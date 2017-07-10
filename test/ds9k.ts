@@ -132,18 +132,29 @@ export function requestHandler(req: http.IncomingMessage, res: http.ServerRespon
 	});
 }
 
-export function startServer(port = 8080) {
-	const server = http.createServer(requestHandler);
+export class Server {
+	constructor(public port = 8080) {
+		const server = http.createServer(requestHandler);
 
-	const ready = new Promise((resolve, reject) => {
-		server.listen(port, () => {
-			// Always print an annoying message to discourage users.
-			console.error('DeathServer 9000 active. Run for your life.');
-			resolve();
+		this.ready = new Promise((resolve, reject) => {
+			server.listen(port, () => {
+				// Always print an annoying message to discourage users.
+				console.error('DeathServer 9000 active. Run for your life.');
+				resolve();
+			});
+
+			server.on('error', reject);
 		});
 
-		server.on('error', reject);
-	});
+		server.addListener('connection', (stream) => stream.setTimeout(100));
 
-	return(ready);
+		this.server = server;
+	}
+
+	close() {
+		this.server.close();
+	}
+
+	server: http.Server;
+	ready: Promise<void>;
 }

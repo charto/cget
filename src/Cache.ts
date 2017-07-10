@@ -526,6 +526,7 @@ export class Cache {
 				}
 
 				die(err);
+				return;
 			}
 
 			streamRequest.pause();

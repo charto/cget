@@ -423,21 +423,28 @@ export class Cache {
 		const allowCacheWrite = (options.allowCacheWrite !== void 0) ? options.allowCacheWrite : this.allowCacheWrite;
 		var urlRemote = address.url!;
 
-		let resolved = false;
-		let found = false;
+		/** Flag whether deferred is resolved. */
+		let isResolved = false;
+		/** Flag whether a HTTP response was received. */
+		let isFound = false;
+		/** Flag whether stream open callback was called. */
+		let isOpened = false;
 		let streamRequest: request.Request;
 		const streamBuffer = new stream.PassThrough();
 		const redirectList: RedirectSpec[] = [];
 		const deferred = new Deferred<CacheResult>();
 
 		function die(err: NodeJS.ErrnoException | CachedError) {
-			if(resolved) return;
-			resolved = true;
+			if(isResolved) return;
 
 			// Abort and report.
 			streamRequest.abort();
-			streamBuffer.emit('error', err);
 
+			// Only emit error in output stream after open callback
+			// had a chance to attach an error handler.
+			if(isOpened) streamBuffer.emit('error', err);
+
+			isResolved = true;
 			deferred.reject(err);
 		}
 
@@ -458,14 +465,16 @@ export class Cache {
 				if(!allowCacheRead) return(true);
 
 				this.fetchCached(address, options, opened).then((result: CacheResult) => {
-					if(found || resolved) return;
-					found = true;
-					resolved = true;
+					isOpened = true;
+
+					if(isFound || isResolved) return;
+					isFound = true;
 
 					// File was already found in cache so stop downloading.
 					streamRequest.abort();
 
 					this.addLinks(redirectList, address).finally(() => {
+						isResolved = true;
 						deferred.resolve(result);
 					});
 				}).catch((err: NodeJS.ErrnoException) => {
@@ -504,8 +513,8 @@ export class Cache {
 		});
 
 		streamRequest.on('response', (res: http.IncomingMessage) => {
-			if(found) return;
-			found = true;
+			if(isFound) return;
+			isFound = true;
 
 			const status = res.statusCode!;
 
@@ -572,19 +581,23 @@ export class Cache {
 				// Unable to save metadata in the cache. Carry on...
 			});
 
-			pipeReady.then(() => opened(new CacheResult(
-				streamBuffer as any as stream.Readable,
-				address,
-				res.statusCode!,
-				res.statusMessage!,
-				res.headers
-			)));
+			pipeReady.then(
+				() => opened(new CacheResult(
+					streamBuffer as any as stream.Readable,
+					address,
+					res.statusCode!,
+					res.statusMessage!,
+					res.headers
+				))
+			).then(
+				() => isOpened = true
+			);
 		});
 
 		streamRequest.on('end', () => {
-			if(resolved) return;
-			resolved = true;
+			if(isResolved) return;
 
+			isResolved = true;
 			deferred.resolve();
 		});
 

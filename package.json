@@ -7,7 +7,7 @@
   "scripts": {
     "tsc": "tsc",
     "prepublish": "tsc -p src",
-    "test": "node test/serve.js test/cache index.html"
+    "test": "tsc -p test && node test/test.js test/cache"
   },
   "author": "Juha Järvi",
   "license": "MIT",

@@ -1,6 +1,7 @@
 cget
 ====
 
+[![build status](https://travis-ci.org/charto/cget.svg?branch=master)](http://travis-ci.org/charto/cget)
 [![npm version](https://img.shields.io/npm/v/cget.svg)](https://www.npmjs.com/package/cget)
 
 `cget` is a robust streaming parallel download manager with a filesystem cache and a simple API.

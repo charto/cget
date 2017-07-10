@@ -103,6 +103,7 @@ function runTests(port: number, concurrency: number) {
 		allowLocal: true,
 		allowRemote: false,
 		allowCacheRead: false,
+		allowCacheWrite: false,
 		concurrency,
 		cwd
 	});
@@ -111,6 +112,7 @@ function runTests(port: number, concurrency: number) {
 		allowLocal: false,
 		allowRemote: false,
 		allowCacheRead: true,
+		allowCacheWrite: false,
 		concurrency,
 		cwd
 	});
@@ -119,6 +121,7 @@ function runTests(port: number, concurrency: number) {
 		allowLocal: false,
 		allowRemote: true,
 		allowCacheRead: false,
+		allowCacheWrite: false,
 		concurrency,
 		cwd
 	});

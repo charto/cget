@@ -100,11 +100,11 @@ function runTests(port: number, concurrency: number) {
 		origin + '/redirected-index.html'
 	];
 
-	const invalidCached = [
-		'ENOENT', origin + '/' + missingName,
-		'ENOENT', 'http://example.invalid/',
-		404, origin + '/missing.html',
-		404, origin + '/redirected-missing.html'
+	const invalidCachedRemote = [
+		'ENOENT', 'ENOTFOUND', 'http://example.invalid/',
+		'ENOENT', 404, origin + '/' + missingName,
+		404, 404, origin + '/missing.html',
+		404, 404, origin + '/redirected-missing.html'
 	];
 
 	const localLive = new cget.Cache(cachePath, {
@@ -184,15 +184,16 @@ function runTests(port: number, concurrency: number) {
 		);
 	}
 
-	for(let num = 0; num < invalidCached.length; num += 2) {
-		const name = 'Invalid cached fetch ' + (num / 2);
+	for(let num = 0; num < invalidCachedRemote.length; num += 3) {
+		const name = 'Invalid cached fetch ' + (num / 3);
+		const code = invalidCachedRemote[num];
 
 		testList.push(
 			remoteCache.fetch(
-				invalidCached[num + 1] as string
+				invalidCachedRemote[num + 2] as string
 			).then((result: cget.CacheResult) =>
 				unexpectedResult(name, result)
-			).catch((err: Error) => expectedError(name, err, invalidCached[num]))
+			).catch((err: Error) => expectedError(name, err, code))
 		);
 	}
 
@@ -217,6 +218,19 @@ function runTests(port: number, concurrency: number) {
 			).then((result: cget.CacheResult) =>
 				expectedResult(name, result, 200)
 			).catch((err: Error) => unexpectedError(name, err))
+		);
+	}
+
+	for(let num = 0; num < invalidCachedRemote.length; num += 3) {
+		const name = 'Invalid remote fetch ' + (num / 3);
+		const code = invalidCachedRemote[num + 1];
+
+		testList.push(
+			remoteLive.fetch(
+				invalidCachedRemote[num + 2] as string
+			).then((result: cget.CacheResult) =>
+				unexpectedResult(name, result)
+			).catch((err: Error) => expectedError(name, err, code))
 		);
 	}
 

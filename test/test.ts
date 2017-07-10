@@ -6,6 +6,7 @@ import * as cget from '..';
 import { Server } from './ds9k';
 
 const content = '<html></html>\n';
+let errorCount = 0;
 
 function expectedResult(name: string, result: cget.CacheResult, status: number) {
 	const chunkList: Buffer[] = [];
@@ -14,6 +15,7 @@ function expectedResult(name: string, result: cget.CacheResult, status: number) 
 		console.error('Error in test: ' + name);
 		console.error('Expected status: ' + status);
 		console.error('Got status: ' + result.status);
+		++errorCount;
 	}
 
 	result.stream.on('data', (chunk: Buffer) => chunkList.push(chunk));
@@ -22,6 +24,7 @@ function expectedResult(name: string, result: cget.CacheResult, status: number) 
 		console.error('Error in test: ' + name);
 		console.error('Stream reported error:');
 		console.error(err);
+		++errorCount;
 	});
 
 	result.stream.on('end', () => {
@@ -31,6 +34,7 @@ function expectedResult(name: string, result: cget.CacheResult, status: number) 
 			console.error('Error in test: ' + name);
 			console.error('Incorrect data:');
 			console.error(data);
+			++errorCount;
 		} else {
 			console.log('Success in test: ' + name);
 		}
@@ -42,12 +46,14 @@ function unexpectedResult(name: string, result: any) {
 	console.error('Expected error...');
 	console.error('Got result:');
 	console.error(result);
+	++errorCount;
 }
 
 function unexpectedError(name: string, err: Error) {
 	console.error('Error in test: ' + name);
 	console.error('Unexpected error:');
 	console.error(err);
+	++errorCount;
 }
 
 function expectedError(name: string, err: Error, code: number | string) {
@@ -59,6 +65,7 @@ function expectedError(name: string, err: Error, code: number | string) {
 		console.error('Error in test: ' + name);
 		console.error('Expected status: ' + code);
 		console.error('Got status: ' + result);
+		++errorCount;
 	}
 }
 
@@ -221,4 +228,11 @@ const server = new Server(8080);
 server.ready.then(() => Promise.all([
 	runTests(8080, Infinity),
 	runTests(8080, 1)
-])).then(() => server.close());
+])).then(
+	() => server.close()
+).then(
+	() => {
+		console.log('Number of errors: ' + errorCount);
+		process.exit(errorCount)
+	}
+);

@@ -152,7 +152,7 @@ export class Server {
 	}
 
 	close() {
-		this.server.close();
+		return(Promise.promisify(this.server.close).call(this.server));
 	}
 
 	server: http.Server;

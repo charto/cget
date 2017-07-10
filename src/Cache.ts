@@ -259,14 +259,15 @@ export class Cache {
 
 		return(cachePath.then(getHeaders).then((headers: InternalHeaders) => {
 			const status = +(headers['cget-status'] || 0);
+			const target = headers['cget-target'] || headers['location'];
 
-			if(status && status >= 300 && status <= 308 && headers['location']) {
+			if(status && status >= 300 && status <= 308 && target) {
 				oldHeaders.push(headers);
 
 				return(this.getRedirect(
 					new Address(url.resolve(
 						address.url!,
-						'' + (headers['cget-target'] || headers['location'])
+						'' + target
 					)),
 					oldHeaders
 				));

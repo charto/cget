@@ -88,8 +88,8 @@ function runTests(port: number, concurrency: number) {
 	const validCached = [
 		origin + '/index.html',
 		origin + '/',
-		origin
-		// origin + '/redirected-index.html'
+		origin,
+		origin + '/redirected-index.html'
 	];
 
 	const invalidCached = [

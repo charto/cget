@@ -147,6 +147,42 @@ function openLocal(
 	}));
 }
 
+class FetchState implements FetchOptions {
+	constructor(options: FetchOptions = {}) {
+		this.setOptions(options);
+	}
+
+	setOptions(options: FetchOptions = {}) {
+		const optionsObj = options as { [key: string]: any };
+		const thisObj = this as { [key: string]: any };
+
+		for(let key of Object.keys(optionsObj)) {
+			if(optionsObj[key] !== void 0) thisObj[key] = optionsObj[key];
+		}
+
+		return(this);
+	}
+
+	clone() {
+		return(new FetchState(this));
+	}
+
+	allowLocal = false;
+	allowRemote = true;
+	allowCacheRead = true;
+	allowCacheWrite = true;
+	forceHost?: string = void 0;
+	forcePort?: number = void 0;
+	username?: string = void 0;
+	password?: string = void 0;
+	timeout = 0;
+	cwd = '.';
+
+	address: Address;
+	opened: (result: CacheResult) => void;
+	errored: (err: CachedError | NodeJS.ErrnoException) => void;
+}
+
 export class CacheResult {
 	constructor(
 		public stream: stream.Readable,
@@ -193,14 +229,7 @@ export class Cache {
 		this.indexName = options.indexName || 'index.html';
 		this.fetchQueue = new TaskQueue(Promise, options.concurrency || 2);
 
-		this.allowLocal = options.allowLocal || false;
-		this.allowRemote = options.allowRemote || options.allowRemote === void 0;
-		this.allowCacheRead = options.allowCacheRead || options.allowCacheRead === void 0;
-		this.allowCacheWrite = options.allowCacheWrite || options.allowCacheWrite === void 0;
-
-		this.forceHost = options.forceHost;
-		this.forcePort = options.forcePort;
-		this.cwd = options.cwd || '.';
+		this.defaultState = new FetchState(options);
 	}
 
 	/** Store HTTP redirect headers with the final target address. */
@@ -331,97 +360,70 @@ export class Cache {
 	 * and a readable stream of its contents. */
 
 	fetch(uri: string, options: FetchOptions = {}) {
-		const address = new Address(uri, this.cwd || options.cwd);
-		const allowLocal = (options.allowLocal !== void 0) ? options.allowLocal : this.allowLocal;
-		const allowRemote = (options.allowRemote !== void 0) ? options.allowRemote : this.allowRemote;
-		const allowCacheRead = (options.allowCacheRead !== void 0) ? options.allowCacheRead : this.allowCacheRead;
-		const allowCacheWrite = (options.allowCacheWrite !== void 0) ? options.allowCacheWrite : this.allowCacheWrite;
-		let isOpened = false;
-		let isErrored = false;
-		let handler: (
-			opened: (result: CacheResult) => void,
-		) => Promise<any>;
+		return(new Promise((opened, errored) => {
+			const state = this.defaultState.clone().setOptions(options);
 
-		if(address.isLocal && allowLocal) {
-			handler = (opened) => this.fetchLocal(
-				address,
-				options,
-				opened
-			);
-		} else if(!address.isLocal && allowCacheRead) {
-			handler = (opened) => this.fetchCached(
-				address,
-				options,
-				opened
-			).catch((err: CachedError | NodeJS.ErrnoException) => {
-				// Re-throw HTTP and unexpected errors.
-				if((err as CachedError).isCachedError || (err as NodeJS.ErrnoException).code != 'ENOENT' || !allowRemote) {
-					throw(err);
-				}
+			state.address = new Address(uri, state.cwd);
+			state.opened = opened;
+			state.errored = errored;
 
-				return(this.fetchRemote(
-					address,
-					options,
-					opened
-				));
-			});
-		} else if(!address.isLocal && allowRemote) {
-			handler = (opened) => this.fetchRemote(
-				address,
-				options,
-				opened
-			);
-		} else {
-			return(Promise.reject(new CachedError(403, 'Access denied to url ' + address.url)));
-		}
-
-		return(new Promise((opened, errored) =>
-			this.fetchQueue.add(
-				() => handler((result: CacheResult) => {
-					if(!isErrored) {
-						isOpened = true;
-						opened(result);
-					}
-				}).catch((err: CachedError | NodeJS.ErrnoException) => {
-					if(!isOpened) errored(err);
-					isErrored = true;
-				})
-			)
-		));
+			this.fetchDetect(state);
+		}));
 	}
 
-	private fetchLocal(
-		address: Address,
-		options: FetchOptions,
-		opened: (result: CacheResult) => void
-	) {
+	private fetchDetect(state: FetchState) {
+		let handler: () => Promise<any>;
+		const isLocal = state.address.isLocal;
+
+		if(isLocal && state.allowLocal) {
+			handler = () => this.fetchLocal(state);
+		} else if(!isLocal && state.allowCacheRead) {
+			handler = () => this.fetchCached(state).catch(
+				(err: CachedError | NodeJS.ErrnoException) => {
+					// Re-throw HTTP and unexpected errors.
+					if(
+						(err as CachedError).isCachedError ||
+						(err as NodeJS.ErrnoException).code != 'ENOENT' ||
+						!state.allowRemote
+					) {
+						throw(err);
+					}
+
+					return(this.fetchRemote(state));
+				}
+			);
+		} else if(!isLocal && state.allowRemote) {
+			handler = () => this.fetchRemote(state);
+		} else {
+			state.errored(new CachedError(403, 'Access denied to url ' + state.address.url));
+			return;
+		}
+
+		this.fetchQueue.add(
+			() => handler().catch(state.errored)
+		);
+	}
+
+	private fetchLocal(state: FetchState) {
+		const address = state.address;
+
 		const result = {
 			address,
 			cachePath: address.path,
 			headers: defaultHeaders
 		};
 
-		return(openLocal(result, opened));
+		return(openLocal(result, state.opened));
 	}
 
-	private fetchCached(
-		address: Address,
-		options: FetchOptions,
-		opened: (result: CacheResult) => void
-	) {
-		return(this.getRedirect(address).then(
-			(result: RedirectResult) => openLocal(result, opened)
+	private fetchCached(state: FetchState) {
+		return(this.getRedirect(state.address).then(
+			(result: RedirectResult) => openLocal(result, state.opened)
 		));
 	}
 
-	private fetchRemote(
-		address: Address,
-		options: FetchOptions,
-		opened: (result: CacheResult | Promise<CacheResult>) => void
-	) {
-		const allowCacheRead = (options.allowCacheRead !== void 0) ? options.allowCacheRead : this.allowCacheRead;
-		const allowCacheWrite = (options.allowCacheWrite !== void 0) ? options.allowCacheWrite : this.allowCacheWrite;
-		var urlRemote = address.url!;
+	private fetchRemote(state: FetchState) {
+		var urlRemote = state.address.url!;
 
 		/** Flag whether deferred is resolved. */
 		let isResolved = false;
@@ -453,18 +455,18 @@ export class Cache {
 			gzip: true,
 			followRedirect: (res: http.IncomingMessage) => {
 				redirectList.push({
-					address: address,
+					address: state.address,
 					status: res.statusCode!,
 					message: res.statusMessage!,
 					headers: res.headers
 				});
 
 				urlRemote = url.resolve(urlRemote, '' + res.headers.location);
-				address = new Address(urlRemote);
+				state.address = new Address(urlRemote);
 
-				if(!allowCacheRead) return(true);
+				if(!state.allowCacheRead) return(true);
 
-				this.fetchCached(address, options, opened).then((result: CacheResult) => {
+				this.fetchCached(state).then((result: CacheResult) => {
 					isOpened = true;
 
 					if(isFound || isResolved) return;
@@ -473,7 +475,7 @@ export class Cache {
 					// File was already found in cache so stop downloading.
 					streamRequest.abort();
 
-					this.addLinks(redirectList, address).finally(() => {
+					this.addLinks(redirectList, state.address).finally(() => {
 						isResolved = true;
 						deferred.resolve(result);
 					});
@@ -487,18 +489,18 @@ export class Cache {
 			}
 		};
 
-		if(options.timeout) requestConfig.timeout = options.timeout;
+		if(state.timeout) requestConfig.timeout = state.timeout;
 
-		if(options.username && options.password) {
+		if(state.username && state.password) {
 			requestConfig.auth = {
-				user: options.username,
-				pass: options.password,
+				user: state.username,
+				pass: state.password,
 				sendImmediately: true
 			};
 		}
 
 		streamRequest = request.get(
-			Cache.forceRedirect(urlRemote, options),
+			Cache.forceRedirect(urlRemote, state),
 			requestConfig
 		);
 
@@ -525,8 +527,8 @@ export class Cache {
 			} else if(status != 200) {
 				var err = new CachedError(status, res.statusMessage, res.headers);
 
-				if(allowCacheWrite) {
-					this.createCachePath(address).then((cachePath: string) =>
+				if(state.allowCacheWrite) {
+					this.createCachePath(state.address).then((cachePath: string) =>
 						storeHeaders(cachePath, res.headers, {
 							'cget-status': status,
 							'cget-message': res.statusMessage
@@ -540,8 +542,8 @@ export class Cache {
 
 			streamRequest.pause();
 
-			const cacheReady = ( !allowCacheWrite ? Promise.resolve(null) :
-				this.createCachePath(address).then((cachePath: string) => {
+			const cacheReady = ( !state.allowCacheWrite ? Promise.resolve(null) :
+				this.createCachePath(state.address).then((cachePath: string) => {
 					var streamOut = fs.createWriteStream(cachePath);
 
 					streamOut.on('finish', () => {
@@ -564,8 +566,8 @@ export class Cache {
 				streamRequest.pipe(streamBuffer, { end: true });
 				streamRequest.resume();
 
-				if(allowCacheWrite) {
-					tasks.push(this.addLinks(redirectList, address));
+				if(state.allowCacheWrite) {
+					tasks.push(this.addLinks(redirectList, state.address));
 					if(cachePath) {
 						tasks.push(
 							storeHeaders(cachePath, res.headers, {
@@ -582,9 +584,9 @@ export class Cache {
 			});
 
 			pipeReady.then(
-				() => opened(new CacheResult(
+				() => state.opened(new CacheResult(
 					streamBuffer as any as stream.Readable,
-					address,
+					state.address,
 					res.statusCode!,
 					res.statusMessage!,
 					res.headers
@@ -601,12 +603,12 @@ export class Cache {
 			deferred.resolve();
 		});
 
-		if(options.forceHost || options.forcePort || this.forceHost || this.forcePort) {
+		if(state.forceHost || state.forcePort) {
 			// Monkey-patch request to support forceHost when running tests.
 
 			(streamRequest as any).cgetOptions = {
-				forceHost: options.forceHost || this.forceHost,
-				forcePort: options.forcePort || this.forcePort
+				forceHost: state.forceHost,
+				forcePort: state.forcePort
 			};
 		}
 
@@ -645,13 +647,7 @@ export class Cache {
 	private basePath: string;
 	private indexName: string;
 
-	private allowLocal: boolean;
-	private allowRemote: boolean;
-	private allowCacheRead: boolean;
-	private allowCacheWrite: boolean;
-	private forceHost?: string;
-	private forcePort?: number;
-	private cwd: string;
+	private defaultState: FetchState;
 
 	/** Monkey-patch request to support forceHost when running tests. */
 

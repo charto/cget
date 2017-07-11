@@ -126,7 +126,7 @@ export function getHeaders(cachePath: string) {
 function openLocal(
 	{ address, cachePath, headers }: RedirectResult,
 	opened: (result: CacheResult) => void
-) {
+): Promise<{}> {
 	const streamIn = fs.createReadStream(cachePath);
 
 	// Resolve promise with headers if stream opens successfully.
@@ -372,7 +372,7 @@ export class Cache {
 	}
 
 	private fetchDetect(state: FetchState) {
-		let handler: () => Promise<any>;
+		let handler: () => Promise<{}>;
 		const isLocal = state.address.isLocal;
 
 		if(isLocal && state.allowLocal) {
@@ -407,7 +407,7 @@ export class Cache {
 	private fetchLocal(state: FetchState) {
 		const address = state.address;
 
-		const result = {
+		const result: RedirectResult = {
 			address,
 			cachePath: address.path,
 			headers: defaultHeaders
@@ -434,7 +434,7 @@ export class Cache {
 		let streamRequest: request.Request;
 		const streamBuffer = new stream.PassThrough();
 		const redirectList: RedirectSpec[] = [];
-		const deferred = new Deferred<CacheResult>();
+		const deferred = new Deferred<{}>();
 
 		function die(err: NodeJS.ErrnoException | CachedError) {
 			if(isResolved) return;
@@ -466,7 +466,7 @@ export class Cache {
 
 				if(!state.allowCacheRead) return(true);
 
-				this.fetchCached(state).then((result: CacheResult) => {
+				this.fetchCached(state).then(() => {
 					isOpened = true;
 
 					if(isFound || isResolved) return;
@@ -477,7 +477,7 @@ export class Cache {
 
 					this.addLinks(redirectList, state.address).finally(() => {
 						isResolved = true;
-						deferred.resolve(result);
+						deferred.resolve();
 					});
 				}).catch((err: NodeJS.ErrnoException) => {
 					if(err.code != 'ENOENT' && err.code != 'ENOTDIR') {

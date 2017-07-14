@@ -356,19 +356,24 @@ export class Cache {
 	}
 
 	/** Fetch URL from cache or download it if not available yet.
-	 * Returns the file's URL after redirections
-	 * and a readable stream of its contents. */
+	  * @return URL of fetched file after redirections
+	  * and a readable stream of its contents. */
 
 	fetch(uri: string, options: FetchOptions = {}) {
-		return(new Promise((opened, errored) => {
-			const state = this.defaultState.clone().setOptions(options);
+		return(new Promise(
+			(
+				opened: (result: CacheResult) => void,
+				errored: (err: CachedError | NodeJS.ErrnoException) => void
+			) => {
+				const state = this.defaultState.clone().setOptions(options);
 
-			state.address = new Address(uri, state.cwd);
-			state.opened = opened;
-			state.errored = errored;
+				state.address = new Address(uri, state.cwd);
+				state.opened = opened;
+				state.errored = errored;
 
-			this.fetchDetect(state);
-		}));
+				this.fetchDetect(state);
+			}
+		));
 	}
 
 	private fetchDetect(state: FetchState) {

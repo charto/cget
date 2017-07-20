@@ -448,7 +448,7 @@ export class Cache {
 		let extraHeaders: InternalHeaders = {};
 
 		function die(err: NodeJS.ErrnoException | CachedError) {
-			// Abort and report.
+			// Abort download.
 			streamRequest.abort();
 
 			// Only emit error in output stream after open callback
@@ -457,8 +457,9 @@ export class Cache {
 				streamBuffer.emit('error', err);
 			} else {
 				errorList.push(err);
-				deferredOutput.reject(err);
 			}
+
+			deferredOutput.reject(err);
 		}
 
 		const requestConfig: request.CoreOptions = {
@@ -538,6 +539,12 @@ export class Cache {
 
 			const status = res.statusCode!;
 
+			headers = res.headers;
+			extraHeaders = {
+				'cget-status': status,
+				'cget-message': res.statusMessage
+			};
+
 			if(status >= 500 && status < 600) {
 				// TODO
 				console.error('SHOULD RETRY');
@@ -546,11 +553,10 @@ export class Cache {
 				var err = new CachedError(status, res.statusMessage, res.headers);
 
 				if(state.allowCacheWrite) {
-					this.createCachePath(state.address).then((cachePath: string) =>
-						storeHeaders(cachePath, res.headers, {
-							'cget-status': status,
-							'cget-message': res.statusMessage
-						})
+					deferredStore.resolve(
+						this.createCachePath(state.address).then(
+							(result: string) => { cachePath = result; }
+						)
 					);
 				}
 
@@ -595,12 +601,6 @@ export class Cache {
 				() => {
 					// Error events may now be emitted.
 					isCallerNotified = true
-
-					headers = res.headers;
-					extraHeaders = {
-						'cget-status': res.statusCode,
-						'cget-message': res.statusMessage
-					};
 
 					// Start emitting data straight to output streams.
 					onData = (chunk: Buffer) => {

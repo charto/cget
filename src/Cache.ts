@@ -435,7 +435,7 @@ export class Cache {
 		/** Flag whether a HTTP response was received. */
 		let isFound = false;
 		/** Flag whether stream open callback was called. */
-		let isOpened = false;
+		let isCallerNotified = false;
 		let streamRequest: request.Request;
 		const streamBuffer = new stream.PassThrough();
 		let streamOut: fs.WriteStream | null;
@@ -451,13 +451,14 @@ export class Cache {
 
 			// Only emit error in output stream after open callback
 			// had a chance to attach an error handler.
-			if(isOpened) streamBuffer.emit('error', err);
+			if(isCallerNotified) streamBuffer.emit('error', err);
 
 			isResolved = true;
 			deferred.reject(err);
 		}
 
 		const requestConfig: request.CoreOptions = {
+			// Receive raw byte buffers.
 			encoding: null,
 			gzip: true,
 			followRedirect: (res: http.IncomingMessage) => {
@@ -474,7 +475,7 @@ export class Cache {
 				if(!state.allowCacheRead) return(true);
 
 				this.fetchCached(state).then(() => {
-					isOpened = true;
+					isCallerNotified = true;
 
 					if(isFound || isResolved) return;
 					isFound = true;
@@ -604,7 +605,7 @@ export class Cache {
 			).then(
 				() => {
 					// Error events may now be emitted.
-					isOpened = true
+					isCallerNotified = true
 
 					// Start emitting data straight to output streams.
 					onData = (chunk: Buffer) => {

@@ -66,6 +66,7 @@ const defaultHeaders = {
 };
 
 const internalHeaderTbl: { [key: string]: boolean } = {
+	'cget-stamp': true,
 	'cget-status': true,
 	'cget-message': true,
 	'cget-target': true
@@ -243,6 +244,7 @@ export class Cache {
 				headers: headers
 			}) => this.createCachePath(address).then((cachePath: string) =>
 				storeHeaders(cachePath, headers, {
+					'cget-stamp': new Date().getTime(),
 					'cget-status': status,
 					'cget-message': message,
 					'cget-target': target.uri
@@ -541,6 +543,7 @@ export class Cache {
 
 			headers = res.headers;
 			extraHeaders = {
+				'cget-stamp': new Date().getTime(),
 				'cget-status': status,
 				'cget-message': res.statusMessage
 			};

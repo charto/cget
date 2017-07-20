@@ -144,6 +144,15 @@ function runTests(port: number, concurrency: number) {
 		cwd
 	});
 
+	const remoteWritableLive = new cget.Cache(path.resolve(cwd, 'cache2'), {
+		allowLocal: false,
+		allowRemote: true,
+		allowCacheRead: false,
+		allowCacheWrite: true,
+		concurrency,
+		cwd
+	});
+
 	const testList: Promise<any>[] = [];
 
 	for(let num = 0; num < validLocal.length; ++num) {
@@ -237,6 +246,31 @@ function runTests(port: number, concurrency: number) {
 
 		testList.push(
 			remoteLive.fetch(
+				invalidCachedRemote[num + 2] as string
+			).then((result: cget.CacheResult) =>
+				unexpectedResult(name, result)
+			).catch((err: Error) => expectedError(name, err, code))
+		);
+	}
+
+	for(let num = 0; num < validCached.length; ++num) {
+		const name = 'Stored remote fetch ' + num;
+
+		testList.push(
+			remoteWritableLive.fetch(
+				validCached[num]
+			).then((result: cget.CacheResult) =>
+				expectedResult(name, result, 200)
+			).catch((err: Error) => unexpectedError(name, err))
+		);
+	}
+
+	for(let num = 0; num < invalidCachedRemote.length; num += 3) {
+		const name = 'Invalid stored remote fetch ' + (num / 3);
+		const code = invalidCachedRemote[num + 1];
+
+		testList.push(
+			remoteWritableLive.fetch(
 				invalidCachedRemote[num + 2] as string
 			).then((result: cget.CacheResult) =>
 				unexpectedResult(name, result)

@@ -490,6 +490,9 @@ export class Cache {
 					// File was already found in cache so stop downloading.
 					streamRequest.abort();
 
+					// Make sure cached headers are not overwritten.
+					headers = void 0;
+
 					deferredStore.resolve();
 					deferredOutput.resolve();
 				}).catch((err: NodeJS.ErrnoException) => {

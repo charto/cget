@@ -284,7 +284,8 @@ function runTests(port: number, concurrency: number) {
 const server = new Server(8080);
 
 server.ready.then(() => Promise.all([
-	runTests(8080, Infinity),
+	// runTests(8080, Infinity),
+	runTests(8080, 2),
 	runTests(8080, 1)
 ])).then(
 	() => server.close()

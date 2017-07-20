@@ -127,7 +127,7 @@ export function requestHandler(req: http.IncomingMessage, res: http.ServerRespon
 
 		if(!(problem & Problem.timeout)) {
 			res.end();
-			(res as any).connection.destroy();
+			if((res as any).connection) (res as any).connection.destroy();
 		}
 	});
 }

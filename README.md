@@ -7,8 +7,6 @@ cget
 
 `cget` is a robust streaming parallel download manager with a filesystem cache and a simple API.
 
-These docs are relevant to the new version under construction on Github, not yet published on NPM.
-
 Features
 --------
 

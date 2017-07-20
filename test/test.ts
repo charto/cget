@@ -56,8 +56,18 @@ function unexpectedError(name: string, err: Error) {
 	++errorCount;
 }
 
-function expectedError(name: string, err: Error, code: number | string) {
+function expectedError(name: string, err: Error, code: number | string | string[]) {
 	const result = (err as any).code as number || (err as any).status as string;
+
+	if(typeof(code) == 'object') {
+		const codeList = code;
+
+		code = codeList[0];
+
+		for(let valid of codeList) {
+			if(result == valid) code = valid;
+		}
+	}
 
 	if(result == code) {
 		console.log('Success in test: ' + name + ' (' + result + ')');
@@ -101,7 +111,7 @@ function runTests(port: number, concurrency: number) {
 	];
 
 	const invalidCachedRemote = [
-		'ENOENT', 'ENOTFOUND', 'http://example.invalid/',
+		'ENOENT', [ 'ENOTFOUND', 'EAI_AGAIN' ], 'http://example.invalid/',
 		'ENOENT', 404, origin + '/' + missingName,
 		404, 404, origin + '/missing.html',
 		404, 404, origin + '/redirected-missing.html'

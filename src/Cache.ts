@@ -430,31 +430,33 @@ export class Cache {
 	private fetchRemote(state: FetchState) {
 		var urlRemote = state.address.url!;
 
-		/** Flag whether deferred is resolved. */
-		let isResolved = false;
-		/** Flag whether a HTTP response was received. */
+		/** Flag whether data to output was found or received. */
 		let isFound = false;
 		/** Flag whether stream open callback was called. */
 		let isCallerNotified = false;
 		let streamRequest: request.Request;
 		const streamBuffer = new stream.PassThrough();
-		let streamOut: fs.WriteStream | null;
+		let streamStore: fs.WriteStream | null;
 		const redirectList: RedirectSpec[] = [];
-		const deferred = new Deferred<{}>();
+		const deferredStore = new Deferred<{}>();
+		const deferredOutput = new Deferred<{}>();
 		let chunkList: Buffer[] = [];
+		let isEnded = false;
+		let cachePath: string | undefined;
+		let headers: Headers | undefined;
+		let extraHeaders: InternalHeaders = {};
 
 		function die(err: NodeJS.ErrnoException | CachedError) {
-			if(isResolved) return;
-
 			// Abort and report.
 			streamRequest.abort();
 
 			// Only emit error in output stream after open callback
 			// had a chance to attach an error handler.
-			if(isCallerNotified) streamBuffer.emit('error', err);
-
-			isResolved = true;
-			deferred.reject(err);
+			if(isCallerNotified) {
+				streamBuffer.emit('error', err);
+			} else {
+				deferredOutput.reject(err);
+			}
 		}
 
 		const requestConfig: request.CoreOptions = {
@@ -477,16 +479,14 @@ export class Cache {
 				this.fetchCached(state).then(() => {
 					isCallerNotified = true;
 
-					if(isFound || isResolved) return;
+					if(isFound) return;
 					isFound = true;
 
 					// File was already found in cache so stop downloading.
 					streamRequest.abort();
 
-					this.addLinks(redirectList, state.address).finally(() => {
-						isResolved = true;
-						deferred.resolve();
-					});
+					deferredStore.resolve();
+					deferredOutput.resolve();
 				}).catch((err: NodeJS.ErrnoException) => {
 					if(err.code != 'ENOENT' && err.code != 'ENOTDIR') {
 						// Weird error! Let's try to download the remote file anyway.
@@ -507,11 +507,19 @@ export class Cache {
 			};
 		}
 
+		streamBuffer.on('error', () => { deferredOutput.reject(); });
+		streamBuffer.on('finish', () => { deferredOutput.resolve(); });
+
 		streamRequest = request.get(
 			Cache.forceRedirect(urlRemote, state),
 			requestConfig
 		);
 
+		let onData = (chunk: Buffer) => { chunkList.push(chunk); };
+		let onEnd = () => { isEnded = true; };
+
+		streamRequest.on('data', (chunk: Buffer) => onData(chunk));
+		streamRequest.on('end', () => onEnd());
 		streamRequest.on('error', (err: NodeJS.ErrnoException) => {
 			// Check if retrying makes sense for this error.
 			if(retryCodeTbl[err.code || '']) {
@@ -521,9 +529,6 @@ export class Cache {
 				die(err);
 			}
 		});
-
-		let onData = (chunk: Buffer) => { chunkList.push(chunk); };
-		streamRequest.on('data', (chunk: Buffer) => onData(chunk));
 
 		streamRequest.on('response', (res: http.IncomingMessage) => {
 			if(isFound) return;
@@ -551,50 +556,32 @@ export class Cache {
 				return;
 			}
 
-			const cacheReady = ( !state.allowCacheWrite ? Promise.resolve(null) :
-				this.createCachePath(state.address).then((cachePath: string) => {
-					streamOut = fs.createWriteStream(cachePath);
+			const cacheReady = ( !state.allowCacheWrite ? Promise.resolve(deferredStore.resolve()) :
+				this.createCachePath(state.address).then((result: string) => {
+					cachePath = result;
+					streamStore = fs.createWriteStream(cachePath);
 
 					// Output stream file handle stays open unless manually closed.
-					streamOut.on('finish', () => streamOut!.close());
-
-					streamOut.on('error', () => {
-						streamOut!.close()
-						streamOut = null;
-						// TODO: Was a partial file left in cache?
-						// Maybe metadata should be written only after finish event
-						// to detect such errors in cache later.
+					streamStore.on('finish', () => {
+						streamStore!.close();
+						deferredStore.resolve();
 					});
 
-					return(cachePath);
+					streamStore.on('error', () => {
+						streamStore!.close();
+						streamStore = null;
+						deferredStore.reject();
+					});
 				}).catch(
 					// Can't write to cache for some reason. Carry on...
-					(err: NodeJS.ErrnoException) => streamOut = null
+					(err: NodeJS.ErrnoException) => {
+						streamStore = null;
+						deferredStore.reject();
+					}
 				)
 			);
 
-			const metaReady = cacheReady.then((cachePath: string | null) => {
-				const tasks: Promise<any>[] = [];
-
-				if(state.allowCacheWrite) {
-					tasks.push(this.addLinks(redirectList, state.address));
-
-					if(cachePath) {
-						tasks.push(
-							storeHeaders(cachePath, res.headers, {
-								'cget-status': res.statusCode,
-								'cget-message': res.statusMessage
-							})
-						);
-					}
-				}
-
-				return(Promise.all(tasks));
-			}).catch((err: NodeJS.ErrnoException) => {
-				// Unable to save metadata in the cache. Carry on...
-			});
-
-			metaReady.then(
+			cacheReady.then(
 				() => state.opened(new CacheResult(
 					streamBuffer as any as stream.Readable,
 					state.address,
@@ -607,14 +594,27 @@ export class Cache {
 					// Error events may now be emitted.
 					isCallerNotified = true
 
+					headers = res.headers;
+					extraHeaders = {
+						'cget-status': res.statusCode,
+						'cget-message': res.statusMessage
+					};
+
 					// Start emitting data straight to output streams.
 					onData = (chunk: Buffer) => {
-						if(streamOut) streamOut.write(chunk);
+						if(streamStore) streamStore.write(chunk);
 						streamBuffer.write(chunk);
+					}
+
+					onEnd = () => {
+						if(streamStore) streamStore.end();
+						streamBuffer.end();
 					}
 
 					// Output data chunks already arrived in memory buffer.
 					for(let chunk of chunkList) onData(chunk);
+
+					if(isEnded) onEnd();
 
 					// Clear buffer to save memory.
 					chunkList = [];
@@ -622,11 +622,24 @@ export class Cache {
 			);
 		});
 
-		streamRequest.on('end', () => {
-			if(isResolved) return;
+		const metaReady = deferredStore.promise.then(() => {
+			const tasks: Promise<any>[] = [];
 
-			isResolved = true;
-			deferred.resolve();
+			// Write metadata.
+			if(headers && state.allowCacheWrite) {
+				tasks.push(this.addLinks(redirectList, state.address));
+
+				if(cachePath) {
+					tasks.push(storeHeaders(cachePath, headers, extraHeaders));
+				}
+			}
+
+			// Allow next queued download after metadata is written.
+			return(Promise.all(tasks));
+		}).catch((err: NodeJS.ErrnoException) => {
+			// TODO: Was a partial file left in cache?
+			// Maybe missing metadata should be used
+			// to detect such errors in cache later.
 		});
 
 		if(state.forceHost || state.forcePort) {
@@ -638,7 +651,12 @@ export class Cache {
 			};
 		}
 
-		return(deferred.promise);
+		return(Promise.all([
+			// All content written to cache.
+			metaReady,
+			// All content written to output stream.
+			deferredOutput.promise
+		]));
 	}
 
 	private static forceRedirect(urlRemote: string, options: FetchOptions) {

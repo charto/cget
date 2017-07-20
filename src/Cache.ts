@@ -438,8 +438,10 @@ export class Cache {
 		let isOpened = false;
 		let streamRequest: request.Request;
 		const streamBuffer = new stream.PassThrough();
+		let streamOut: fs.WriteStream | null;
 		const redirectList: RedirectSpec[] = [];
 		const deferred = new Deferred<{}>();
+		let chunkList: Buffer[] = [];
 
 		function die(err: NodeJS.ErrnoException | CachedError) {
 			if(isResolved) return;
@@ -519,6 +521,9 @@ export class Cache {
 			}
 		});
 
+		let onData = (chunk: Buffer) => { chunkList.push(chunk); };
+		streamRequest.on('data', (chunk: Buffer) => onData(chunk));
+
 		streamRequest.on('response', (res: http.IncomingMessage) => {
 			if(isFound) return;
 			isFound = true;
@@ -545,34 +550,34 @@ export class Cache {
 				return;
 			}
 
-			streamRequest.pause();
-
 			const cacheReady = ( !state.allowCacheWrite ? Promise.resolve(null) :
 				this.createCachePath(state.address).then((cachePath: string) => {
-					var streamOut = fs.createWriteStream(cachePath);
+					streamOut = fs.createWriteStream(cachePath);
 
-					streamOut.on('finish', () => {
-						// Output stream file handle stays open after piping unless manually closed.
-						streamOut.close();
+					// Output stream file handle stays open unless manually closed.
+					streamOut.on('finish', () => streamOut!.close());
+
+					streamOut.on('error', () => {
+						streamOut!.close()
+						streamOut = null;
+						// TODO: Was a partial file left in cache?
+						// Maybe metadata should be written only after finish event
+						// to detect such errors in cache later.
 					});
-
-					streamRequest.pipe(streamOut, { end: true });
 
 					return(cachePath);
 				}).catch(
 					// Can't write to cache for some reason. Carry on...
-					(err: NodeJS.ErrnoException) => null
+					(err: NodeJS.ErrnoException) => streamOut = null
 				)
 			);
 
-			const pipeReady = cacheReady.then((cachePath: string | null) => {
+			const metaReady = cacheReady.then((cachePath: string | null) => {
 				const tasks: Promise<any>[] = [];
-
-				streamRequest.pipe(streamBuffer, { end: true });
-				streamRequest.resume();
 
 				if(state.allowCacheWrite) {
 					tasks.push(this.addLinks(redirectList, state.address));
+
 					if(cachePath) {
 						tasks.push(
 							storeHeaders(cachePath, res.headers, {
@@ -588,7 +593,7 @@ export class Cache {
 				// Unable to save metadata in the cache. Carry on...
 			});
 
-			pipeReady.then(
+			metaReady.then(
 				() => state.opened(new CacheResult(
 					streamBuffer as any as stream.Readable,
 					state.address,
@@ -597,7 +602,22 @@ export class Cache {
 					res.headers
 				))
 			).then(
-				() => isOpened = true
+				() => {
+					// Error events may now be emitted.
+					isOpened = true
+
+					// Start emitting data straight to output streams.
+					onData = (chunk: Buffer) => {
+						if(streamOut) streamOut.write(chunk);
+						streamBuffer.write(chunk);
+					}
+
+					// Output data chunks already arrived in memory buffer.
+					for(let chunk of chunkList) onData(chunk);
+
+					// Clear buffer to save memory.
+					chunkList = [];
+				}
 			);
 		});
 

@@ -441,6 +441,7 @@ export class Cache {
 		const deferredStore = new Deferred<{}>();
 		const deferredOutput = new Deferred<{}>();
 		let chunkList: Buffer[] = [];
+		let errorList: (NodeJS.ErrnoException | CachedError)[] = [];
 		let isEnded = false;
 		let cachePath: string | undefined;
 		let headers: Headers | undefined;
@@ -455,6 +456,7 @@ export class Cache {
 			if(isCallerNotified) {
 				streamBuffer.emit('error', err);
 			} else {
+				errorList.push(err);
 				deferredOutput.reject(err);
 			}
 		}
@@ -614,10 +616,14 @@ export class Cache {
 					// Output data chunks already arrived in memory buffer.
 					for(let chunk of chunkList) onData(chunk);
 
+					// Emit any errors already encountered.
+					for(let err of errorList) streamBuffer.emit('error', err);
+
 					if(isEnded) onEnd();
 
-					// Clear buffer to save memory.
+					// Clear buffers to save memory.
 					chunkList = [];
+					errorList = [];
 				}
 			);
 		});

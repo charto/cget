@@ -1,6 +1,6 @@
 {
   "name": "cget",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Robust streaming parallel download manager with filesystem cache",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",

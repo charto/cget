@@ -95,27 +95,27 @@ function removeInternalHeaders(headers: Headers | InternalHeaders) {
 
 /** Get path to headers for a locally cached file. */
 
-export function getHeaderPath(cachePath: string) {
-	return(cachePath + '.header.json');
+export function getHeaderPath(cachePath: string, uri: string) {
+	return(cachePath + '.' + uri.split(':')[0] + '.header.json');
 }
 
-function storeHeaders(cachePath: string, headers: Headers, extra: InternalHeaders ) {
+function storeHeaders(cachePath: string, uri: string, headers: Headers, extra: InternalHeaders ) {
 	const output: InternalHeaders = {};
 
 	for(let key of Object.keys(headers)) output[key] = headers[key];
 	for(let key of Object.keys(extra)) output[key] = extra[key];
 
 	return(fsa.writeFile(
-		getHeaderPath(cachePath),
+		getHeaderPath(cachePath, uri),
 		JSON.stringify(extra),
 		{ encoding: 'utf8' }
 	));
 }
 
-export function getHeaders(cachePath: string) {
+export function getHeaders(cachePath: string, uri: string) {
 	return(
 		fsa.readFile(
-			getHeaderPath(cachePath),
+			getHeaderPath(cachePath, uri),
 			{ encoding: 'utf8' }
 		).then(JSON.parse).catch(
 			/** If headers are not found, invent some. */
@@ -243,7 +243,7 @@ export class Cache {
 				message: message,
 				headers: headers
 			}) => this.createCachePath(address).then((cachePath: string) =>
-				storeHeaders(cachePath, headers, {
+				storeHeaders(cachePath, address.uri, headers, {
 					'cget-stamp': new Date().getTime(),
 					'cget-status': status,
 					'cget-message': message,
@@ -288,7 +288,7 @@ export class Cache {
 	getRedirect(address: Address, oldHeaders: InternalHeaders[] = []): Promise<RedirectResult> {
 		const cachePath = this.getCachePath(address);
 
-		return(cachePath.then(getHeaders).then((headers: InternalHeaders) => {
+		return(cachePath.then((result: string) => getHeaders(result, address.uri)).then((headers: InternalHeaders) => {
 			const status = +(headers['cget-status'] || 0);
 			const target = headers['cget-target'] || headers['location'];
 
@@ -642,7 +642,7 @@ export class Cache {
 				tasks.push(this.addLinks(redirectList, state.address));
 
 				if(cachePath) {
-					tasks.push(storeHeaders(cachePath, headers, extraHeaders));
+					tasks.push(storeHeaders(cachePath, state.address.uri, headers, extraHeaders));
 				}
 			}
 

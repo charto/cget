@@ -29,6 +29,7 @@ export interface FetchOptions {
 	password?: string;
 	timeout?: number;
 	cwd?: string;
+	requestConfig?: request.CoreOptions;
 }
 
 export interface CacheOptions extends FetchOptions {
@@ -148,20 +149,27 @@ function openLocal(
 	}));
 }
 
+function extend<Type>(dst: Type, src: { [key: string]: any }) {
+	for(let key of Object.keys(src)) {
+		if(src[key] !== void 0) {
+			(dst as { [key: string]: any })[key] = src[key];
+		}
+	}
+
+	return(dst);
+}
+
 class FetchState implements FetchOptions {
 	constructor(options: FetchOptions = {}) {
 		this.setOptions(options);
 	}
 
 	setOptions(options: FetchOptions = {}) {
-		const optionsObj = options as { [key: string]: any };
-		const thisObj = this as { [key: string]: any };
+		return(extend(this, options));
+	}
 
-		for(let key of Object.keys(optionsObj)) {
-			if(optionsObj[key] !== void 0) thisObj[key] = optionsObj[key];
-		}
-
-		return(this);
+	patchRequest(config: request.CoreOptions) {
+		return(extend(config, this.requestConfig || {}));
 	}
 
 	clone() {
@@ -178,6 +186,8 @@ class FetchState implements FetchOptions {
 	password?: string = void 0;
 	timeout = 0;
 	cwd = '.';
+
+	requestConfig?: request.CoreOptions = void 0;
 
 	address: Address;
 	opened: (result: CacheResult) => void;
@@ -464,7 +474,7 @@ export class Cache {
 			deferredOutput.reject(err);
 		}
 
-		const requestConfig: request.CoreOptions = {
+		const requestConfig: request.CoreOptions = state.patchRequest({
 			// Receive raw byte buffers.
 			encoding: null,
 			gzip: true,
@@ -503,7 +513,7 @@ export class Cache {
 
 				return(true);
 			}
-		};
+		});
 
 		if(state.timeout) requestConfig.timeout = state.timeout;
 

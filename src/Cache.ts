@@ -158,6 +158,28 @@ function extend<Type>(dst: Type, src: { [key: string]: any }) {
 	return(dst);
 }
 
+function applyRewrite(url: string, options: FetchState) {
+	return(options.rewrite ? options.rewrite(url) : url);
+}
+
+/** Monkey-patch request to support rewriting redirected addresses. */
+
+function patchRequest() {
+	const proto = require('request/lib/redirect.js').Redirect.prototype;
+
+	if(proto.cgetPatched) return;
+	proto.cgetPatched = true;
+
+	const func = proto.redirectTo;
+
+	proto.redirectTo = function(this: any) {
+		const urlRemote = func.apply(this, Array.prototype.slice.apply(arguments));
+		const state: FetchState = this.request.cgetState;
+
+		return(urlRemote && state ? applyRewrite(urlRemote, state) : urlRemote);
+	};
+}
+
 class FetchState implements FetchOptions {
 	constructor(options: FetchOptions = {}) {
 		this.setOptions(options);
@@ -167,7 +189,7 @@ class FetchState implements FetchOptions {
 		return(extend(this, options));
 	}
 
-	patchRequest(config: request.CoreOptions) {
+	extendRequestConfig(config: request.CoreOptions) {
 		return(extend(config, this.requestConfig || {}));
 	}
 
@@ -472,7 +494,7 @@ export class Cache {
 			deferredOutput.reject(err);
 		}
 
-		const requestConfig: request.CoreOptions = state.patchRequest({
+		const requestConfig: request.CoreOptions = state.extendRequestConfig({
 			// Receive raw byte buffers.
 			encoding: null,
 			gzip: true,
@@ -526,10 +548,15 @@ export class Cache {
 		streamBuffer.on('error', () => { deferredOutput.reject(); });
 		streamBuffer.on('finish', () => { deferredOutput.resolve(); });
 
+		// Monkey-patch request to support url rewrite hook.
+		if(state.rewrite) patchRequest();
+
 		streamRequest = request.get(
-			Cache.applyRewrite(urlRemote, state),
+			applyRewrite(urlRemote, state),
 			requestConfig
 		);
+
+		if(state.rewrite) (streamRequest as any).cgetState = state;
 
 		let onData = (chunk: Buffer) => { chunkList.push(chunk); };
 		let onEnd = () => { isEnded = true; };
@@ -662,22 +689,12 @@ export class Cache {
 			// to detect such errors in cache later.
 		});
 
-		if(state.rewrite) {
-			// Monkey-patch request to support url rewrite hook.
-
-			(streamRequest as any).cgetState = state;
-		}
-
 		return(Promise.all([
 			// All content written to cache.
 			metaReady,
 			// All content written to output stream.
 			deferredOutput.promise
 		]));
-	}
-
-	private static applyRewrite(url: string, options: FetchState) {
-		return(options.rewrite ? options.rewrite(url) : url);
 	}
 
 	/** Queue for limiting parallel downloads. */
@@ -687,22 +704,5 @@ export class Cache {
 	private indexName: string;
 
 	private defaultState: FetchState;
-
-	/** Monkey-patch request to support forceHost when running tests. */
-
-	static patchRequest() {
-		var proto = require('request/lib/redirect.js').Redirect.prototype;
-
-		var func = proto.redirectTo;
-
-		proto.redirectTo = function(this: any) {
-			var urlRemote = func.apply(this, Array.prototype.slice.apply(arguments));
-			var state: FetchState = this.request.cgetState;
-
-			if(urlRemote && state) return(Cache.applyRewrite(urlRemote, state));
-
-			return(urlRemote);
-		};
-	}
 
 }

@@ -23,8 +23,7 @@ export interface FetchOptions {
 	allowRemote?: boolean;
 	allowCacheRead?: boolean;
 	allowCacheWrite?: boolean;
-	forceHost?: string;
-	forcePort?: number;
+	rewrite?: (url: string) => string;
 	username?: string;
 	password?: string;
 	timeout?: number;
@@ -180,8 +179,7 @@ class FetchState implements FetchOptions {
 	allowRemote = true;
 	allowCacheRead = true;
 	allowCacheWrite = true;
-	forceHost?: string = void 0;
-	forcePort?: number = void 0;
+	rewrite?: (url: string) => string = void 0;
 	username?: string = void 0;
 	password?: string = void 0;
 	timeout = 0;
@@ -529,7 +527,7 @@ export class Cache {
 		streamBuffer.on('finish', () => { deferredOutput.resolve(); });
 
 		streamRequest = request.get(
-			Cache.forceRedirect(urlRemote, state),
+			Cache.applyRewrite(urlRemote, state),
 			requestConfig
 		);
 
@@ -664,13 +662,10 @@ export class Cache {
 			// to detect such errors in cache later.
 		});
 
-		if(state.forceHost || state.forcePort) {
-			// Monkey-patch request to support forceHost when running tests.
+		if(state.rewrite) {
+			// Monkey-patch request to support url rewrite hook.
 
-			(streamRequest as any).cgetOptions = {
-				forceHost: state.forceHost,
-				forcePort: state.forcePort
-			};
+			(streamRequest as any).cgetState = state;
 		}
 
 		return(Promise.all([
@@ -681,30 +676,8 @@ export class Cache {
 		]));
 	}
 
-	private static forceRedirect(urlRemote: string, options: FetchOptions) {
-		if(!options.forceHost && !options.forcePort) return(urlRemote);
-
-		var urlParts = url.parse(urlRemote);
-		var changed = false;
-
-		if(!urlParts.hostname) return(urlRemote);
-
-		if(options.forceHost && urlParts.hostname != options.forceHost) {
-			urlParts.hostname = options.forceHost;
-			changed = true;
-		}
-
-		if(options.forcePort && urlParts.port != '' + options.forcePort) {
-			urlParts.port = '' + options.forcePort;
-			changed = true;
-		}
-
-		if(!changed) return(urlRemote);
-
-		urlParts.search = '?host=' + encodeURIComponent(urlParts.host || '');
-		urlParts.host = null as any;
-
-		return(url.format(urlParts));
+	private static applyRewrite(url: string, options: FetchState) {
+		return(options.rewrite ? options.rewrite(url) : url);
 	}
 
 	/** Queue for limiting parallel downloads. */
@@ -724,9 +697,9 @@ export class Cache {
 
 		proto.redirectTo = function(this: any) {
 			var urlRemote = func.apply(this, Array.prototype.slice.apply(arguments));
-			var options: FetchOptions = this.request.cgetOptions;
+			var state: FetchState = this.request.cgetState;
 
-			if(urlRemote && options) return(Cache.forceRedirect(urlRemote, options));
+			if(urlRemote && state) return(Cache.applyRewrite(urlRemote, state));
 
 			return(urlRemote);
 		};

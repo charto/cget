@@ -28,7 +28,14 @@ export interface FetchOptions {
 	password?: string;
 	timeout?: number;
 	cwd?: string;
+
 	requestConfig?: request.CoreOptions;
+
+	retryCount?: number;
+	/** Backoff time between retries, in milliseconds. */
+	retryDelay?: number;
+	/** Base for exponential backoff. */
+	retryBackoffFactor?: number;
 }
 
 export interface CacheOptions extends FetchOptions {
@@ -126,13 +133,15 @@ export function getHeaders(cachePath: string, uri: string) {
 
 function openLocal(
 	{ address, cachePath, headers }: RedirectResult,
-	opened: (result: CacheResult) => void
+	state: FetchState
 ): Promise<{}> {
 	const streamIn = fs.createReadStream(cachePath);
 
+	// TODO: If "opened" already called, pipe to state.streamBuffer.
+
 	// Resolve promise with headers if stream opens successfully.
 	streamIn.on('open', () => {
-		opened(new CacheResult(
+		state.opened(new CacheResult(
 			streamIn,
 			address,
 			+(headers['cget-status'] || 200),
@@ -180,9 +189,32 @@ function patchRequest() {
 	};
 }
 
+class BufferStream extends stream.Transform {
+	_transform(
+		chunk: Buffer,
+		encoding: string,
+		flush: (err: NodeJS.ErrnoException | null, chunk: Buffer) => void
+	) {
+		this.len += chunk.length;
+
+		flush(null, chunk);
+	}
+
+	len = 0;
+}
+
 class FetchState implements FetchOptions {
 	constructor(options: FetchOptions = {}) {
 		this.setOptions(options);
+
+		if(
+			!this.retryDelay ||
+			!this.retryCount ||
+			this.retryDelay < 0 ||
+			this.retryCount < 0
+		) this.retryCount = 0;
+
+		this.retriesRemaining = this.retryCount;
 	}
 
 	setOptions(options: FetchOptions = {}) {
@@ -209,9 +241,17 @@ class FetchState implements FetchOptions {
 
 	requestConfig?: request.CoreOptions = void 0;
 
+	retryCount = 0;
+	retryDelay = 0;
+	retryBackoffFactor = 1;
+	retriesRemaining: number;
+
 	address: Address;
 	opened: (result: CacheResult) => void;
 	errored: (err: CachedError | NodeJS.ErrnoException) => void;
+
+	streamBuffer?: BufferStream;
+
 }
 
 export class CacheResult {
@@ -408,7 +448,7 @@ export class Cache {
 		));
 	}
 
-	private fetchDetect(state: FetchState) {
+	private fetchDetect(state: FetchState, delay =  0) {
 		let handler: () => Promise<{}>;
 		const isLocal = state.address.isLocal;
 
@@ -437,7 +477,8 @@ export class Cache {
 		}
 
 		this.fetchQueue.add(
-			() => handler().catch(state.errored)
+			() => handler().catch(state.errored),
+			delay
 		);
 	}
 
@@ -450,12 +491,12 @@ export class Cache {
 			headers: defaultHeaders
 		};
 
-		return(openLocal(result, state.opened));
+		return(openLocal(result, state));
 	}
 
 	private fetchCached(state: FetchState) {
 		return(this.getRedirect(state.address).then(
-			(result: RedirectResult) => openLocal(result, state.opened)
+			(result: RedirectResult) => openLocal(result, state)
 		));
 	}
 
@@ -467,7 +508,7 @@ export class Cache {
 		/** Flag whether stream open callback was called. */
 		let isCallerNotified = false;
 		let streamRequest: request.Request;
-		const streamBuffer = new stream.PassThrough();
+		const streamBuffer = state.streamBuffer || new BufferStream();
 		let streamStore: fs.WriteStream | null;
 		const redirectList: RedirectSpec[] = [];
 		const deferredStore = new Deferred<{}>();
@@ -493,6 +534,22 @@ export class Cache {
 
 			deferredOutput.reject(err);
 		}
+
+		function retry(cache: Cache, err: NodeJS.ErrnoException | CachedError) {
+			// Abort download.
+			streamRequest.abort();
+
+			--state.retriesRemaining;
+
+			deferredStore.resolve();
+			deferredOutput.resolve();
+
+			cache.fetchDetect(state, state.retryDelay * (1 + Math.random()));
+
+			state.retryDelay *= state.retryBackoffFactor;
+		}
+
+		state.streamBuffer = streamBuffer;
 
 		const requestConfig: request.CoreOptions = state.extendRequestConfig({
 			// Receive raw byte buffers.
@@ -565,9 +622,8 @@ export class Cache {
 		streamRequest.on('end', () => onEnd());
 		streamRequest.on('error', (err: NodeJS.ErrnoException) => {
 			// Check if retrying makes sense for this error.
-			if(retryCodeTbl[err.code || '']) {
-				console.error('SHOULD RETRY');
-				die(err);
+			if(retryCodeTbl[err.code || ''] && state.retriesRemaining >= 0) {
+				retry(this, err);
 			} else {
 				die(err);
 			}
@@ -594,6 +650,7 @@ export class Cache {
 				var err = new CachedError(status, res.statusMessage, res.headers);
 
 				if(state.allowCacheWrite) {
+					// Allow metaReady promise to resolve.
 					deferredStore.resolve(
 						this.createCachePath(state.address).then(
 							(result: string) => { cachePath = result; }

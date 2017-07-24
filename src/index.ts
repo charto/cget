@@ -1,9 +1,9 @@
 export { Address } from './Address';
+export { CacheResult } from './CacheResult';
 export {
 	FetchOptions,
 	CacheOptions,
 	Cache,
-	CacheResult,
 	RedirectResult,
 	Headers,
 	getHeaderPath

@@ -31,9 +31,9 @@
   ],
   "dependencies": {
     "@types/bluebird": "^3.5.8",
-    "@types/node": "^8.0.14",
+    "@types/node": "^8.0.19",
     "bluebird": "^3.5.0",
-    "cwait": "^1.1.0",
+    "cwait": "^1.1.1",
     "request": "~2.81.0"
   },
   "devDependencies": {

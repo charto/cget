@@ -44,8 +44,7 @@ function expectedResult(name: string, result: cget.CacheResult, status: number) 
 function unexpectedResult(name: string, result: any) {
 	console.error('Error in test: ' + name);
 	console.error('Expected error...');
-	console.error('Got result:');
-	console.error(result);
+	console.error('Got result: ' + result);
 	++errorCount;
 }
 
@@ -83,7 +82,7 @@ function runTests(port: number, concurrency: number) {
 	const cwd = __dirname;
 	const cachePath = path.resolve(cwd, 'cache');
 
-	const storedPath = 'cache/localhost/index.html';
+	const storedPath = 'cache/http/localhost/index.html';
 	const missingName = 'missing-' + Math.random();
 	const origin = 'http://localhost:' + port;
 
@@ -94,9 +93,9 @@ function runTests(port: number, concurrency: number) {
 	];
 
 	const invalidLocal = [
-		'file://' + missingName + '/index.html',
-		'file://' + missingName + '/',
-		'file://' + missingName,
+		'file:///' + missingName + '/index.html',
+		'file:///' + missingName + '/',
+		'file:///' + missingName,
 		'./' + missingName,
 		'../test/' + missingName,
 		'../test/' + missingName + '/',
@@ -111,8 +110,8 @@ function runTests(port: number, concurrency: number) {
 	];
 
 	const invalidCachedRemote = [
-		'ENOENT', [ 'ENOTFOUND', 'EAI_AGAIN' ], 'http://example.invalid/',
-		'ENOENT', 404, origin + '/' + missingName,
+		'EPERM', [ 'ENOTFOUND', 'EAI_AGAIN' ], 'http://example.invalid/',
+		'EPERM', 404, origin + '/' + missingName,
 		404, 404, origin + '/missing.html',
 		404, 404, origin + '/redirected-missing.html'
 	];
@@ -140,6 +139,8 @@ function runTests(port: number, concurrency: number) {
 		allowRemote: true,
 		allowCacheRead: false,
 		allowCacheWrite: false,
+		retryCount: 10,
+		retryDelay: 100,
 		concurrency,
 		cwd
 	});
@@ -149,6 +150,8 @@ function runTests(port: number, concurrency: number) {
 		allowRemote: true,
 		allowCacheRead: false,
 		allowCacheWrite: true,
+		retryCount: 10,
+		retryDelay: 100,
 		concurrency,
 		cwd
 	});
@@ -175,7 +178,7 @@ function runTests(port: number, concurrency: number) {
 				validLocal[num]
 			).then((result: cget.CacheResult) =>
 				unexpectedResult(name, result)
-			).catch((err: Error) => expectedError(name, err, 403))
+			).catch((err: Error) => expectedError(name, err, 'EPERM'))
 		);
 	}
 
@@ -224,7 +227,7 @@ function runTests(port: number, concurrency: number) {
 				validCached[num]
 			).then((result: cget.CacheResult) =>
 				unexpectedResult(name, result)
-			).catch((err: Error) => expectedError(name, err, 403))
+			).catch((err: Error) => expectedError(name, err, 'EPERM'))
 		);
 	}
 
@@ -282,12 +285,17 @@ function runTests(port: number, concurrency: number) {
 }
 
 const server = new Server(8080);
+// const server = { ready: Promise.resolve(true), close: () => {} };
 
-server.ready.then(() => Promise.all([
-	// runTests(8080, Infinity),
-	runTests(8080, 2),
-	runTests(8080, 1)
-])).then(
+const promiseList: any[] = [];
+
+for(let i = 0; i < 10; ++i) {
+	promiseList.push(runTests(8080, Infinity));
+}
+
+promiseList.push(runTests(8080, 1));
+
+server.ready.then(() => Promise.all(promiseList)).then(
 	() => server.close()
 ).then(
 	() => {

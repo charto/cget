@@ -4,7 +4,9 @@ export {
 	FetchOptions,
 	CacheOptions,
 	Cache,
-	RedirectResult,
-	Headers,
-	getHeaderPath
+	Headers
 } from './Cache';
+export {
+	getHeaderPath,
+	RedirectResult
+} from './strategy/FileSystemCache';

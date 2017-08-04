@@ -16,6 +16,10 @@ import * as Promise from 'bluebird';
 
 import { Address, Cache, CacheResult, RedirectResult, getHeaderPath } from '..';
 
+export interface Headers {
+	[key: string]: string | string[] | number | undefined
+};
+
 export const enum ProblemBase {
 	close = 1,
 	length = close * 8,
@@ -58,7 +62,7 @@ var cache = new Cache(
 class Error9k extends Error {
 	/** @param code HTTP status code.
 	  * @param headers Optional extra headers (clobbered by send method). */
-	constructor(public code?: number, public headers: http.ServerResponseHeaders = {}) {
+	constructor(public code?: number, public headers: Headers = {}) {
 		super(code ? http.STATUS_CODES[code] : 'Unknown error');
 	}
 
@@ -84,14 +88,15 @@ export function requestHandler(req: http.IncomingMessage, res: http.ServerRespon
 	const match = (parts.query || '').match(/problem=([0-9]+)/);
 	const problem = match ? match[1] as Problem : Problem.none;
 	const problemClose = problem & Problem.closeMask;
+	const problemStatus = problem & Problem.statusMask;
 
 	const host = req.headers.host! as string;
 	const address = new Address('http://' + host.replace(/:.*/, '') + parts.pathname);
-	const headers: http.ServerResponseHeaders = {};
+	const headers: Headers = {};
 	let cachePath: string;
 
-	cache.getRedirect(address).then((result: RedirectResult) => {
-		const oldHeaders = result.oldHeaders && result.oldHeaders[0];
+	(cache.fetchPipeline[1] as any).getRedirect(address).then((result: RedirectResult) => {
+		const oldHeaders = result.address.history[0] && result.address.history[0].data;
 
 		if(oldHeaders) {
 			throw(new Error9k(
@@ -116,7 +121,11 @@ export function requestHandler(req: http.IncomingMessage, res: http.ServerRespon
 		headers['Content-Length'] = stats.size;
 
 		if(problemClose == Problem.closeBeforeHeader) throw(new Error9k());
-		res.writeHead(200, headers);
+		if(problemStatus == Problem.statusCode) {
+			res.writeHead(403, headers);
+		} else {
+			res.writeHead(200, headers);
+		}
 		if(problemClose == Problem.closeAfterHeader) throw(new Error9k());
 
 		fs.createReadStream(cachePath, { encoding: null as any, start: 0 }).pipe(res);

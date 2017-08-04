@@ -1,7 +1,5 @@
-// This file is part of cget, copyright (c) 2015 BusFaster Ltd.
+// This file is part of cget, copyright (c) 2015-2017 BusFaster Ltd.
 // Released under the MIT license, see LICENSE.
-
-// Define some simple utility functions to avoid depending on other packages.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -9,25 +7,30 @@ import * as Promise from 'bluebird';
 
 /** Asynchronous versions of fs methods, wrapped by Bluebird. */
 
+const statAsync = Promise.promisify(fs.stat, { context: fs });
+const renameAsync = Promise.promisify(fs.rename, { context: fs }) as (src: string, dst: string) => Promise<{}>;
+const mkdirAsync = Promise.promisify(fs.mkdir, { context: fs }) as (name: string) => Promise<{}>;
+
+/*
 export const fsa = {
 	stat: Promise.promisify(fs.stat),
 	open: Promise.promisify(fs.open),
-	rename: Promise.promisify(fs.rename) as any as (src: string, dst: string) => Promise<{}>,
+	rename: Promise.promisify(fs.rename) as (src: string, dst: string) => Promise<{}>,
 	mkdir: Promise.promisify(fs.mkdir) as (name: string) => Promise<{}>,
 	readFile: Promise.promisify(fs.readFile) as any as (name: string, options: {encoding: string; flag?: string;}) => Promise<string>,
 	writeFile: Promise.promisify(fs.writeFile) as (name: string, content: string, options: {encoding: string; flag?: string;}) => Promise<{}>
 };
+*/
 
-var againSymbol = {};
-var again = () => againSymbol;
+const again = {};
 
 /** Promise while loop. */
 
-export function repeat<T>(fn: (again: () => {}) => Promise<T> | undefined): Promise<T> {
+export function repeat<T>(fn: (again: {}) => Promise<T> | T | undefined): Promise<T> {
 	return(Promise.try(() =>
 		fn(again)!
 	).then((result: T) =>
-		(result == againSymbol) ? repeat(fn) : result
+		(result == again) ? repeat(fn) : result
 	));
 }
 
@@ -42,12 +45,12 @@ export function mkdirp(pathName: string, indexName: string) {
 
 	// Remove path components until an existing directory is found.
 
-	return(repeat((again: () => {}) => {
+	return(repeat((again: {}) => {
 		if(!prefixList.length) return;
 
 		pathPrefix = prefixList.join(path.sep);
 
-		return(fsa.stat(pathPrefix).then((stats: fs.Stats): {} | undefined => {
+		return(statAsync(pathPrefix).then((stats: fs.Stats): {} | undefined => {
 			if(stats.isFile()) {
 				// Trying to convert a file into a directory.
 				// Rename the file to indexName and move it into the new directory.
@@ -55,13 +58,13 @@ export function mkdirp(pathName: string, indexName: string) {
 				var tempPath = pathPrefix + '.' + makeTempSuffix(6);
 
 				return(
-					fsa.rename(
+					renameAsync(
 						pathPrefix,
 						tempPath
 					).then(() =>
-						fsa.mkdir(pathPrefix)
+						mkdirAsync(pathPrefix)
 					).then(() =>
-						fsa.rename(tempPath, path.join(pathPrefix, indexName))
+						renameAsync(tempPath, path.join(pathPrefix, indexName))
 					)
 				);
 			} else if(!stats.isDirectory()) {
@@ -72,7 +75,7 @@ export function mkdirp(pathName: string, indexName: string) {
 			if(err.code != 'ENOENT' && err.code != 'ENOTDIR') throw(err);
 
 			prefixList.pop();
-			return(again());
+			return(again);
 		}));
 	})).then(() => Promise.reduce(
 		// Create path components that didn't exist yet.
@@ -81,7 +84,7 @@ export function mkdirp(pathName: string, indexName: string) {
 			var pathNew = pathPrefix + path.sep + part;
 
 			return(Promise.try(() =>
-				fsa.mkdir(pathNew)
+				mkdirAsync(pathNew)
 			).catch((err: NodeJS.ErrnoException) => {
 				// Because of a race condition with simultaneous cache stores,
 				// the directory might already exist.
@@ -103,12 +106,4 @@ export function makeTempSuffix(length: number) {
 		.toString(36)
 		.substr(1)
 	)
-}
-
-export function isDir(cachePath: string) {
-	return(fsa.stat(cachePath).then(
-		(stats: fs.Stats) => stats.isDirectory()
-	).catch(
-		(err: NodeJS.ErrnoException) => false
-	));
 }

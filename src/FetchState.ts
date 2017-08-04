@@ -1,11 +1,12 @@
+import * as Promise from 'bluebird';
 import * as request from 'request';
 
-import { FetchOptions, CachedError } from './Cache';
+import { Cache, FetchOptions, InternalHeaders } from './Cache';
 import { BufferStream } from './BufferStream';
-import { CacheResult } from './CacheResult';
+import { CacheResult, CachedError } from './CacheResult';
 import { Address } from './Address';
 
-function extend<Type>(dst: Type, src: { [key: string]: any }) {
+export function extend<Type>(dst: Type, src: { [key: string]: any }) {
 	for(let key of Object.keys(src)) {
 		if(src[key] !== void 0) {
 			(dst as { [key: string]: any })[key] = src[key];
@@ -41,6 +42,31 @@ export class FetchState implements FetchOptions {
 		return(new FetchState(this));
 	}
 
+	startStream(result: CacheResult) {
+		const ready = Promise.try(
+			() => this.onStream(result)
+		).then(
+			() => { this.isStreaming = true; }
+		);
+
+		return(ready);
+	}
+
+	retryNow() {
+		this.strategyNum = 0;
+	}
+
+	retryLater() {
+		if(!this.retriesRemaining) return;
+		--this.retriesRemaining;
+
+		this.strategyNum = 0;
+
+		// Signal cache to delay before retrying.
+		this.strategyDelay = this.retryDelay * (1 + Math.random());
+		this.retryDelay *= this.retryBackoffFactor;
+	}
+
 	allowLocal = false;
 	allowRemote = true;
 	allowCacheRead = true;
@@ -58,10 +84,14 @@ export class FetchState implements FetchOptions {
 	retryBackoffFactor = 1;
 	retriesRemaining: number;
 
-	address: Address;
-	opened: (result: CacheResult) => void;
+	strategyNum = 0;
+	strategyDelay = 0;
+	isStreaming = false;
+
+	address: Address<InternalHeaders>;
+	onStream: (result: CacheResult) => void;
 	errored: (err: CachedError | NodeJS.ErrnoException) => void;
 
-	streamBuffer?: BufferStream;
+	buffer?: BufferStream;
 
 }

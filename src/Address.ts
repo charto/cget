@@ -20,7 +20,7 @@ export function sanitizePath(path: string) {
 }
 
 export class Address {
-	constructor(uri: string, cwd?: string) {
+	constructor(uri: string, cwd?: string, cacheKey?: string) {
 		if(uri.match(/^\.?\.?\//)) {
 			// The URI looks more like a local path.
 			this.path = path.resolve(cwd || '.', uri);
@@ -32,7 +32,7 @@ export class Address {
 			this.isLocal = true;
 		} else if(uri.substr(0, 4) == 'urn:') {
 			this.urn = uri;
-			this.path = sanitizePath(this.urn.substr(4).replace(/:/g, '/'));
+			this.path = sanitizePath(cacheKey || this.urn.substr(4).replace(/:/g, '/'));
 		} else {
 			// If the URI is not a URN address, interpret it as a URL address and clean it up.
 
@@ -48,6 +48,7 @@ export class Address {
 			);
 
 			this.path = sanitizePath(
+				cacheKey ||
 				url.resolve('', origin.replace(/:.*/, '') + slash + parts.pathname) +
 				(parts.search || '')
 			);

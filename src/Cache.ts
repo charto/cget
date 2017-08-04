@@ -32,6 +32,8 @@ export interface FetchOptions {
 	timeout?: number;
 	cwd?: string;
 
+	cacheKey?: string;
+
 	requestConfig?: request.CoreOptions;
 
 	retryCount?: number;
@@ -357,7 +359,7 @@ export class Cache {
 			) => {
 				const state = this.defaultState.clone().setOptions(options);
 
-				state.address = new Address(uri, state.cwd);
+				state.address = new Address(uri, state.cwd, options.cacheKey);
 				state.opened = opened;
 				state.errored = errored;
 

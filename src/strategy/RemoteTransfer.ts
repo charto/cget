@@ -133,9 +133,7 @@ export class RemoteTransfer {
 			var err = new CachedError(status, res.statusMessage, headers);
 
 			if(state.allowCacheWrite) {
-				this.strategy.cache.store(this.state.address.url, void 0, headers).catch(
-					() => {}
-				);
+				this.strategy.cache.store(this.state.address, void 0, headers).catch(() => {});
 			}
 
 			this.die(err);
@@ -145,7 +143,7 @@ export class RemoteTransfer {
 		if(state.allowCacheWrite) {
 			this.streamStore = new stream.PassThrough();
 
-			this.strategy.cache.store(this.state.address.url, this.streamStore, headers).catch(() => {});
+			this.strategy.cache.store(this.state.address, this.streamStore, headers).catch(() => {});
 			// TODO: Only call this is cacheKey is not set!
 			this.strategy.addLinks(this.state.address);
 		}

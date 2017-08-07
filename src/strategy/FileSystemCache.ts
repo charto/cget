@@ -147,6 +147,8 @@ export class FileSystemCache extends Strategy {
 							stream.close();
 							reject(err);
 						});
+
+						data.pipe(stream);
 					}))
 				}
 			}));

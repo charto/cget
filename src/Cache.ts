@@ -139,8 +139,8 @@ export class Cache {
 	  * for example an XML namespace.
 	  * @return Promise resolving to path of cached file after all data is written. */
 
-	store(uri: string, data?: string | stream.Readable, headers?: InternalHeaders) {
-		const address = new Address(uri);
+	store(uri: string | Address, data?: string | stream.Readable, headers?: InternalHeaders) {
+		const address = uri instanceof Address ? uri : new Address(uri);
 		const pipeline = this.storePipeline;
 		let strategyNum = 0;
 

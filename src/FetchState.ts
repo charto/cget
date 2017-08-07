@@ -57,7 +57,7 @@ export class FetchState implements FetchOptions {
 	}
 
 	retryLater() {
-		if(!this.retriesRemaining) return;
+		if(this.retriesRemaining <= 0) return;
 		--this.retriesRemaining;
 
 		this.strategyNum = 0;

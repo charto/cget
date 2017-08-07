@@ -40,7 +40,10 @@ export class RemoteTransfer {
 			// Receive raw byte buffers.
 			encoding: null,
 			gzip: true,
-			followRedirect: (res: http.IncomingMessage) => this.followRedirect(res)
+			followRedirect: (res: http.IncomingMessage) => this.followRedirect(res),
+			pool: {
+				maxSockets: Infinity
+			}
 		});
 
 		if(state.timeout) config.timeout = state.timeout;

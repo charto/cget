@@ -1,6 +1,6 @@
 {
   "name": "cget",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Robust streaming parallel download manager with filesystem cache",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -32,12 +32,12 @@
   "dependencies": {
     "@types/bluebird": "^3.5.8",
     "@types/node": "^8.0.19",
+    "@types/request": "2.0.0",
     "bluebird": "^3.5.0",
     "cwait": "^1.1.1",
     "request": "~2.81.0"
   },
   "devDependencies": {
-    "@types/request": "2.0.0",
     "typescript": "^2.4.2"
   }
 }

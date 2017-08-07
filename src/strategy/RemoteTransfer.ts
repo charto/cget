@@ -147,8 +147,7 @@ export class RemoteTransfer {
 			this.streamStore = new stream.PassThrough();
 
 			this.strategy.cache.store(this.state.address, this.streamStore, headers).catch(() => {});
-			// TODO: Only call this is cacheKey is not set!
-			this.strategy.addLinks(this.state.address);
+			if(!this.state.address.cacheKey) this.strategy.addLinks(this.state.address);
 		}
 
 		if(!state.buffer) state.buffer = new BufferStream();

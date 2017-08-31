@@ -19,12 +19,13 @@ export function openLocal(
 
 	// Resolve promise with headers if stream opens successfully.
 	streamIn.on('open', () => {
+		// TODO: Should always stream through a buffer...
 		if(state.buffer) {
 			streamIn.pipe(state.buffer);
 		} else {
 			state.startStream(new CacheResult(
 				streamIn,
-				state.address,
+				state,
 				headers
 			));
 		}
@@ -35,6 +36,8 @@ export function openLocal(
 			resolve: (result: boolean) => void,
 			reject: (err: NodeJS.ErrnoException) => void
 		) => {
+			// TODO: also emit the error?
+			state.onKill = reject;
 			// Cached file doesn't exist or IO error.
 			streamIn.on('error', reject);
 			streamIn.on('end', () => resolve(true));

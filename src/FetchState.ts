@@ -52,6 +52,10 @@ export class FetchState implements FetchOptions {
 		return(ready);
 	}
 
+	abort() {
+		this.strategyNum = Infinity;
+	}
+
 	retryNow() {
 		this.strategyNum = 0;
 	}
@@ -89,6 +93,7 @@ export class FetchState implements FetchOptions {
 	isStreaming = false;
 
 	address: Address<InternalHeaders>;
+	onKill: (err?: any) => void;
 	onStream: (result: CacheResult) => void;
 	errored: (err: CachedError | NodeJS.ErrnoException) => void;
 

@@ -2,6 +2,7 @@ import * as stream from 'stream';
 
 import { Address } from './Address';
 import { Headers, InternalHeaders } from './Cache';
+import { FetchState } from './FetchState';
 
 const internalHeaderTbl: { [key: string]: boolean } = {
 	'cget-stamp': true,
@@ -28,14 +29,26 @@ function removeInternalHeaders(headers: Headers | InternalHeaders) {
 export class CacheResult {
 	constructor(
 		public stream: stream.Readable,
-		public address: Address,
+		private state: FetchState,
 		headers: InternalHeaders
 	) {
+		this.address = state.address;
 		this.status = headers['cget-status'] || 200;
 		this.message = headers['cget-message'] || 'OK';
 		this.headers = removeInternalHeaders(headers);
 	}
 
+	retry(err?: any) {
+		this.state.retryNow();
+		this.state.onKill(err);
+	}
+
+	abort(err?: any) {
+		this.state.abort();
+		this.state.onKill(err);
+	}
+
+	address: Address;
 	status: number;
 	message: string;
 	headers: Headers;

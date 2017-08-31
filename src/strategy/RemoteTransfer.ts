@@ -105,6 +105,7 @@ export class RemoteTransfer {
 		// Only emit error in output stream after open callback
 		// had a chance to attach an error handler.
 		if(this.state.isStreaming) {
+			// TODO: call destroy method instead?
 			this.streamBuffer.emit('error', err);
 		} else {
 			this.errorList.push(err);
@@ -150,6 +151,9 @@ export class RemoteTransfer {
 			if(!this.state.address.cacheKey) this.strategy.addLinks(this.state.address);
 		}
 
+		// TODO: call this.die instead?
+		state.onKill = (err?: any) => this.deferred.reject(err);
+
 		if(!state.buffer) state.buffer = new BufferStream();
 		this.streamBuffer = state.buffer
 
@@ -163,7 +167,7 @@ export class RemoteTransfer {
 
 		state.startStream(new CacheResult(
 			this.streamBuffer,
-			state.address,
+			state,
 			res.headers
 		)).then(() => {
 			// Start emitting data straight to output streams.
@@ -181,6 +185,7 @@ export class RemoteTransfer {
 			for(let chunk of this.chunkList) this.onData(chunk);
 
 			// Emit any errors already encountered.
+			// TODO: Also call destroy method?
 			for(let err of this.errorList) this.streamBuffer.emit('error', err);
 
 			if(this.isEnded) this.onEnd();

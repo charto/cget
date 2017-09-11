@@ -1,5 +1,5 @@
 export { Address } from './Address';
-export { CacheResult } from './CacheResult';
+export { CacheResult, CustomError, CachedError } from './CacheResult';
 export {
 	FetchOptions,
 	CacheOptions,

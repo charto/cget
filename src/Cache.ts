@@ -125,7 +125,7 @@ export class Cache {
 					if(state.strategyNum >= pipeline.length || errLatest instanceof CachedError) {
 						state.errored(errLatest || new Error('Unable to handle URI ' + state.address.uri));
 					} else if(state.strategyDelay) {
-						this.fetchDetect(state, state.retryDelay * (1 + Math.random()));
+						this.fetchDetect(state, state.strategyDelay);
 					} else {
 						return(again);
 					}

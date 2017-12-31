@@ -26,7 +26,6 @@ import { BufferStream } from './BufferStream';
 import { CacheResult, CachedError } from './CacheResult';
 
 // TODO: continue interrupted downloads.
-// TODO: handle redirect loops.
 
 export interface FetchOptions {
 	allowLocal?: boolean;
@@ -48,6 +47,9 @@ export interface FetchOptions {
 	retryDelay?: number;
 	/** Base for exponential backoff. */
 	retryBackoffFactor?: number;
+
+	/** Maximum number of redirects before throwing error. */
+	redirectCount?: number;
 }
 
 export interface CacheOptions extends FetchOptions {

@@ -27,7 +27,13 @@ export class FetchState implements FetchOptions {
 			this.retryCount < 0
 		) this.retryCount = 0;
 
+		if(
+			!this.redirectCount ||
+			this.redirectCount < 0
+		) this.redirectCount = 0;
+
 		this.retriesRemaining = this.retryCount;
+		this.redirectsRemaining = this.redirectCount;
 	}
 
 	setOptions(options: FetchOptions = {}) {
@@ -87,6 +93,9 @@ export class FetchState implements FetchOptions {
 	retryDelay = 0;
 	retryBackoffFactor = 1;
 	retriesRemaining: number;
+
+	redirectCount = 0;
+	redirectsRemaining: number;
 
 	strategyNum = 0;
 	strategyDelay = 0;

@@ -169,14 +169,20 @@ export class FileSystemCache extends Strategy {
 
 	/** Check if there are cached headers with errors or redirecting the URL. */
 
-	getRedirect(address: Address): Promise<RedirectResult> {
+	getRedirect(state: FetchState, address: Address): Promise<RedirectResult> {
 		const result = this.getCachePath(address.path).then(
 			(cachePath: string) => getHeaders(cachePath, address).then((headers: InternalHeaders) => {
 				const status = +(headers['cget-status'] || 0);
 				const target = headers['cget-target'] || '' + headers['location'];
 
 				if(status && status >= 300 && status <= 308 && target) {
-					return(this.getRedirect(address.redirect(target)));
+					if(!state.redirectsRemaining) {
+						throw(new CachedError(status, 'Too many redirects', headers));
+					}
+
+					--state.redirectsRemaining;
+
+					return(this.getRedirect(state, address.redirect(target)));
 				}
 
 				if(status && status != 200 && (status < 500 || status >= 600)) {
@@ -194,7 +200,7 @@ export class FileSystemCache extends Strategy {
 	fetch(state: FetchState) {
 		if(!state.address.isRemote || !state.allowCacheRead) return(false);
 
-		return(this.getRedirect(state.address).then(
+		return(this.getRedirect(state, state.address).then(
 			(result: RedirectResult) => openLocal(state, result.cachePath, result.headers)
 		));
 	}

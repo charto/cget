@@ -71,6 +71,14 @@ export class RemoteTransfer {
 			'cget-message': res.statusMessage!
 		});
 
+		if(!this.state.redirectsRemaining) {
+			const err = new CachedError(res.statusCode!, 'Too many redirects', headers);
+			this.die(err);
+			return(false);
+		}
+
+		--this.state.redirectsRemaining;
+
 		this.state.address.redirect('' + headers.location, false, headers);
 
 		this.state.retryNow();

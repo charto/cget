@@ -30,7 +30,7 @@ export const enum ProblemBase {
   * Note that closing the connection in the middle of data,
   * without timeout or content length, cannot be distinguished from success. */
 
-export const enum Problem {
+export enum Problem {
 	none = 0,
 
 	closeMask = ProblemBase.close * 3,
@@ -86,7 +86,7 @@ class Error9k extends Error {
 export function requestHandler(req: http.IncomingMessage, res: http.ServerResponse) {
 	const parts = url.parse(req.url!);
 	const match = (parts.query || '').match(/problem=([0-9]+)/);
-	const problem = match ? match[1] as Problem : Problem.none;
+	const problem: Problem = (<any>Problem)[match ? match[1] : "none"];
 	const problemClose = problem & Problem.closeMask;
 	const problemStatus = problem & Problem.statusMask;
 

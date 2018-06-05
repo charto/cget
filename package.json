@@ -30,14 +30,14 @@
     "http"
   ],
   "dependencies": {
-    "@types/bluebird": "^3.5.10",
-    "@types/node": "^8.0.28",
-    "@types/request": "2.0.3",
-    "bluebird": "^3.5.0",
+    "bluebird": "^3.5.1",
     "cwait": "^1.1.1",
-    "request": "~2.81.0"
+    "request": "^2.87.0"
   },
   "devDependencies": {
+    "@types/bluebird": "^3.5.20",
+    "@types/node": "^8.0.28",
+    "@types/request": "^2.47.0",
     "typescript": "^2.5.2"
   }
 }
